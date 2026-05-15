@@ -17,7 +17,7 @@ const CATEGORY_COLORS: Record<AttireCategory, string> = {
   'Tenue': 'bg-purple-100 text-purple-700',
   'Chaussures': 'bg-blue-100 text-blue-700',
   'Accessoire': 'bg-green-100 text-green-700',
-  'Costume de spectacles': 'bg-amber-100 text-amber-700',
+  'Costume de spectacle': 'bg-amber-100 text-amber-700',
 };
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
