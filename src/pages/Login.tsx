@@ -99,6 +99,10 @@ export default function Login() {
             </button>
           </form>
 
+          <p className="mt-6 text-center text-sm text-gray-600">
+            Pas encore de compte ? <Link to="/signup" className="text-purple-600 hover:underline font-medium">S'inscrire</Link>
+          </p>
+
           {/* Demo hint */}
           <div className="mt-6 pt-5 border-t border-gray-100">
             <p className="text-xs text-gray-400 text-center mb-3">Comptes de démonstration</p>

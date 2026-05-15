@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 
 const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const AdminAccounts = lazy(() => import('./pages/AdminAccounts'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Planning = lazy(() => import('./pages/Planning'));
 const Courses = lazy(() => import('./pages/Courses'));
@@ -73,6 +75,7 @@ function AppRoutes() {
       <Routes>
         {/* Public */}
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
         {/* Root redirect based on role */}
         <Route path="/" element={<RequireAuth><RootRedirect /></RequireAuth>} />
@@ -90,6 +93,7 @@ function AppRoutes() {
         <Route path="/eleves" element={<AdminRoute><Layout><Students /></Layout></AdminRoute>} />
         <Route path="/professeurs" element={<AdminRoute><Layout><Teachers /></Layout></AdminRoute>} />
         <Route path="/materiel" element={<AdminRoute><Layout><Materials /></Layout></AdminRoute>} />
+        <Route path="/comptes" element={<AdminRoute><Layout><AdminAccounts /></Layout></AdminRoute>} />
 
         {/* Teacher routes */}
         <Route path="/teacher" element={<TeacherRoute><TeacherLayout><TeacherDashboard /></TeacherLayout></TeacherRoute>} />

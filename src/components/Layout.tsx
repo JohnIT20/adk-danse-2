@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Calendar, BookOpen, Star, Users, Shirt, UserCheck, Menu, X, Music2, LogOut,
+  LayoutDashboard, Calendar, BookOpen, Star, Users, Shirt, UserCheck, Menu, X, Music2, LogOut, ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -14,6 +14,7 @@ const nav = [
   { to: '/eleves', icon: Users, label: 'Élèves' },
   { to: '/professeurs', icon: Users, label: 'Professeurs' },
   { to: '/materiel', icon: Shirt, label: 'Tenues & Spectacles' },
+  { to: '/comptes', icon: ShieldAlert, label: 'Gestion des accès' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
