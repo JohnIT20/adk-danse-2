@@ -1,7 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 
@@ -112,9 +111,7 @@ export default function App() {
       <Toaster position="top-right" richColors />
       <BrowserRouter>
         <AuthProvider>
-          <AppProvider>
-            <AppRoutes />
-          </AppProvider>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </>
