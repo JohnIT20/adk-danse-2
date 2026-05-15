@@ -8,7 +8,7 @@ import {
 import { fr } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, ArrowLeft, Star, Shirt, Calendar,
-  CheckCircle, Euro, Plus, X, AlertCircle, CreditCard, Clock, XCircle,
+  CheckCircle, Euro, Plus, X, AlertCircle, CreditCard, Clock,
 } from 'lucide-react';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -29,7 +29,7 @@ export default function ChildView() {
   const { currentUser } = useAuth();
   const {
     students, courses, courseEnrollments, registrations, proSessions, teachers,
-    addCourseEnrollment, deleteCourseEnrollment, addRegistration,
+    addCourseEnrollment, updateCourseEnrollment, deleteCourseEnrollment, addRegistration,
   } = useApp();
   const navigate = useNavigate();
 
