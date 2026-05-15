@@ -95,11 +95,27 @@ export const useApp = create<AppContextType>()(
         const { data: teachers } = await supabase.from('teachers').select('*');
         const { data: courses } = await supabase.from('courses').select('*');
         const { data: students } = await supabase.from('students').select('*');
+        const { data: proSessions } = await supabase.from('pro_sessions').select('*');
+        const { data: registrations } = await supabase.from('registrations').select('*');
+        const { data: courseExceptions } = await supabase.from('course_exceptions').select('*');
+        const { data: spectacles } = await supabase.from('spectacles').select('*');
+        const { data: courseEnrollments } = await supabase.from('course_enrollments').select('*');
+        const { data: rooms } = await supabase.from('rooms').select('*');
+        const { data: changeRequests } = await supabase.from('schedule_change_requests').select('*');
+        const { data: representations } = await supabase.from('representations').select('*');
 
         set((state) => ({
           teachers: teachers || state.teachers,
           courses: courses || state.courses,
           students: students || state.students,
+          proSessions: proSessions || state.proSessions,
+          registrations: registrations || state.registrations,
+          courseExceptions: courseExceptions || state.courseExceptions,
+          spectacles: spectacles || state.spectacles,
+          courseEnrollments: courseEnrollments || state.courseEnrollments,
+          rooms: rooms || state.rooms,
+          changeRequests: changeRequests || state.changeRequests,
+          representations: representations || state.representations,
         }));
       },
 
@@ -111,35 +127,35 @@ export const useApp = create<AppContextType>()(
       updateCourse: async (c) => { set((state) => ({ courses: state.courses.map((x) => (x.id === c.id ? c : x)) })); await supabase.from('courses').update(c).eq('id', c.id); },
       deleteCourse: async (id) => { set((state) => ({ courses: state.courses.filter((x) => x.id !== id) })); await supabase.from('courses').delete().eq('id', id); },
 
-      addProSession: (s) => set((state) => ({ proSessions: [...state.proSessions, s] })),
-      updateProSession: (s) => set((state) => ({ proSessions: state.proSessions.map((x) => (x.id === s.id ? s : x)) })),
-      deleteProSession: (id) => set((state) => ({ proSessions: state.proSessions.filter((x) => x.id !== id) })),
+      addProSession: async (s) => { set((state) => ({ proSessions: [...state.proSessions, s] })); await supabase.from('pro_sessions').insert(s); },
+      updateProSession: async (s) => { set((state) => ({ proSessions: state.proSessions.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('pro_sessions').update(s).eq('id', s.id); },
+      deleteProSession: async (id) => { set((state) => ({ proSessions: state.proSessions.filter((x) => x.id !== id) })); await supabase.from('pro_sessions').delete().eq('id', id); },
 
       addStudent: async (s) => { set((state) => ({ students: [...state.students, s] })); await supabase.from('students').insert(s); },
       updateStudent: async (s) => { set((state) => ({ students: state.students.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('students').update(s).eq('id', s.id); },
 
-      addRegistration: (r) => set((state) => ({ registrations: [...state.registrations, r] })),
-      updateRegistration: (r) => set((state) => ({ registrations: state.registrations.map((x) => (x.id === r.id ? r : x)) })),
-      deleteRegistration: (id) => set((state) => ({ registrations: state.registrations.filter((x) => x.id !== id) })),
+      addRegistration: async (r) => { set((state) => ({ registrations: [...state.registrations, r] })); await supabase.from('registrations').insert(r); },
+      updateRegistration: async (r) => { set((state) => ({ registrations: state.registrations.map((x) => (x.id === r.id ? r : x)) })); await supabase.from('registrations').update(r).eq('id', r.id); },
+      deleteRegistration: async (id) => { set((state) => ({ registrations: state.registrations.filter((x) => x.id !== id) })); await supabase.from('registrations').delete().eq('id', id); },
 
-      addCourseException: (e) => set((state) => ({ courseExceptions: [...state.courseExceptions, e] })),
-      updateCourseException: (e) => set((state) => ({ courseExceptions: state.courseExceptions.map((x) => (x.id === e.id ? e : x)) })),
-      deleteCourseException: (id) => set((state) => ({ courseExceptions: state.courseExceptions.filter((x) => x.id !== id) })),
+      addCourseException: async (e) => { set((state) => ({ courseExceptions: [...state.courseExceptions, e] })); await supabase.from('course_exceptions').insert(e); },
+      updateCourseException: async (e) => { set((state) => ({ courseExceptions: state.courseExceptions.map((x) => (x.id === e.id ? e : x)) })); await supabase.from('course_exceptions').update(e).eq('id', e.id); },
+      deleteCourseException: async (id) => { set((state) => ({ courseExceptions: state.courseExceptions.filter((x) => x.id !== id) })); await supabase.from('course_exceptions').delete().eq('id', id); },
 
-      addCourseEnrollment: (e) => set((state) => ({ courseEnrollments: [...state.courseEnrollments, e] })),
-      updateCourseEnrollment: (e) => set((state) => ({ courseEnrollments: state.courseEnrollments.map((x) => (x.id === e.id ? e : x)) })),
-      deleteCourseEnrollment: (id) => set((state) => ({ courseEnrollments: state.courseEnrollments.filter((x) => x.id !== id) })),
+      addCourseEnrollment: async (e) => { set((state) => ({ courseEnrollments: [...state.courseEnrollments, e] })); await supabase.from('course_enrollments').insert(e); },
+      updateCourseEnrollment: async (e) => { set((state) => ({ courseEnrollments: state.courseEnrollments.map((x) => (x.id === e.id ? e : x)) })); await supabase.from('course_enrollments').update(e).eq('id', e.id); },
+      deleteCourseEnrollment: async (id) => { set((state) => ({ courseEnrollments: state.courseEnrollments.filter((x) => x.id !== id) })); await supabase.from('course_enrollments').delete().eq('id', id); },
 
-      addChangeRequest: (r) => set((state) => ({ changeRequests: [...state.changeRequests, r] })),
-      updateChangeRequest: (r) => set((state) => ({ changeRequests: state.changeRequests.map((x) => (x.id === r.id ? r : x)) })),
+      addChangeRequest: async (r) => { set((state) => ({ changeRequests: [...state.changeRequests, r] })); await supabase.from('schedule_change_requests').insert(r); },
+      updateChangeRequest: async (r) => { set((state) => ({ changeRequests: state.changeRequests.map((x) => (x.id === r.id ? r : x)) })); await supabase.from('schedule_change_requests').update(r).eq('id', r.id); },
 
-      addRepresentation: (r) => set((state) => ({ representations: [...state.representations, r] })),
-      updateRepresentation: (r) => set((state) => ({ representations: state.representations.map((x) => (x.id === r.id ? r : x)) })),
-      deleteRepresentation: (id) => set((state) => ({ representations: state.representations.filter((x) => x.id !== id) })),
+      addRepresentation: async (r) => { set((state) => ({ representations: [...state.representations, r] })); await supabase.from('representations').insert(r); },
+      updateRepresentation: async (r) => { set((state) => ({ representations: state.representations.map((x) => (x.id === r.id ? r : x)) })); await supabase.from('representations').update(r).eq('id', r.id); },
+      deleteRepresentation: async (id) => { set((state) => ({ representations: state.representations.filter((x) => x.id !== id) })); await supabase.from('representations').delete().eq('id', id); },
 
-      addSpectacle: (s) => set((state) => ({ spectacles: [...state.spectacles, s] })),
-      updateSpectacle: (s) => set((state) => ({ spectacles: state.spectacles.map((x) => (x.id === s.id ? s : x)) })),
-      deleteSpectacle: (id) => set((state) => ({ spectacles: state.spectacles.filter((x) => x.id !== id) })),
+      addSpectacle: async (s) => { set((state) => ({ spectacles: [...state.spectacles, s] })); await supabase.from('spectacles').insert(s); },
+      updateSpectacle: async (s) => { set((state) => ({ spectacles: state.spectacles.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('spectacles').update(s).eq('id', s.id); },
+      deleteSpectacle: async (id) => { set((state) => ({ spectacles: state.spectacles.filter((x) => x.id !== id) })); await supabase.from('spectacles').delete().eq('id', id); },
 
       resetToDefaults: () => set({
         teachers: defaultTeachers,
