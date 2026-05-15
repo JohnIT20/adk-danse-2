@@ -1,31 +1,39 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { Music2, Eye, EyeOff, LogIn } from 'lucide-react';
+
+const loginSchema = z.object({
+  email: z.string().email("Adresse email invalide"),
+  password: z.string().min(1, "Le mot de passe est requis"),
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError('');
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema)
+  });
+
+  function onSubmit(data: LoginForm) {
     setLoading(true);
     setTimeout(() => {
-      const result = login(email, password);
+      const result = login(data.email, data.password);
       setLoading(false);
       if (!result.ok) {
-        setError(result.error ?? 'Erreur de connexion.');
+        toast.error(result.error ?? 'Erreur de connexion.');
         return;
       }
-      // Redirect based on role (re-read from login result would require returning user)
-      // We'll navigate and let App handle the routing
+      toast.success('Connexion réussie !');
       navigate('/');
     }, 400);
   }
@@ -47,18 +55,16 @@ export default function Login() {
           <h2 className="text-xl font-semibold text-gray-800 mb-1">Connexion</h2>
           <p className="text-sm text-gray-500 mb-6">Connectez-vous avec votre adresse email.</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
               <input
-                type="email"
-                required
                 autoFocus
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+                className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition ${errors.email ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
                 placeholder="votre@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                {...register('email')}
               />
+              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
             </div>
 
             <div>
@@ -66,11 +72,9 @@ export default function Login() {
               <div className="relative">
                 <input
                   type={showPwd ? 'text' : 'password'}
-                  required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition pr-11"
+                  className={`w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition pr-11 ${errors.password ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
                   placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  {...register('password')}
                 />
                 <button
                   type="button"
@@ -80,13 +84,8 @@ export default function Login() {
                   {showPwd ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
+              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
             </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
-                {error}
-              </div>
-            )}
 
             <button
               type="submit"

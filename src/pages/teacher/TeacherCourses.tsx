@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { findScheduleConflict } from '../../utils/conflicts';
 import type { Course, DanceStyle, Level, AgeGroup, DayOfWeek, AttireItem, AttireCategory, ScheduleChangeRequest } from '../../types';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { Pencil, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Plus, AlertCircle, CheckCircle } from 'lucide-react';
 
 const STYLES: DanceStyle[] = ['Éveil à la danse', 'Danse classique', 'Jazz', 'Contemporain', 'Hip-hop', 'Break', 'Ragga', 'Girly', 'Pomdance', 'Line Dance', 'Pole Dance'];
@@ -76,6 +77,7 @@ export default function TeacherCourses() {
     // No conflict → apply
     updateCourse({ ...editingCourse, ...form } as Course);
     setSaved(true);
+    toast.success('Modifications enregistrées !');
     setConflict(null);
     setTimeout(() => { setEditingCourse(null); setSaved(false); }, 800);
   }
@@ -98,6 +100,7 @@ export default function TeacherCourses() {
     };
     addChangeRequest(req);
     setConflict(null);
+    toast.success('Demande de remplacement envoyée !');
     setRequestNote('');
     setEditingCourse(null);
   }
