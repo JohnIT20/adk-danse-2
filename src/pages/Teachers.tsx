@@ -6,6 +6,9 @@ import {
   ShieldCheck, Search,
 } from 'lucide-react';
 import type { Teacher, DanceStyle, Course } from '../types';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
 const STYLES: DanceStyle[] = [
   'Éveil à la danse', 'Danse classique', 'Jazz', 'Contemporain', 'Hip-hop',
@@ -19,6 +22,17 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 const EMPTY_TEACHER: Omit<Teacher, 'id'> = {
   firstName: '', lastName: '', email: '', phone: '', specialties: [], bio: '', color: COLORS[0],
 };
+
+const teacherSchema = z.object({
+  firstName: z.string().min(1, "Le prénom est requis"),
+  lastName: z.string().min(1, "Le nom est requis"),
+  email: z.string().email("Email invalide").or(z.literal('')),
+  phone: z.string().optional(),
+  bio: z.string().optional(),
+  color: z.string(),
+  specialties: z.array(z.string()),
+});
+type TeacherFormValues = z.infer<typeof teacherSchema>;
 
 type ManageTab = 'courses' | 'info';
 
@@ -598,17 +612,19 @@ function EditModal({
   onClose: () => void;
   onSave: (data: Omit<Teacher, 'id'>) => void;
 }) {
-  const [form, setForm] = useState<Omit<Teacher, 'id'>>(
-    teacher ? { ...teacher } : { ...EMPTY_TEACHER }
-  );
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<TeacherFormValues>({
+    resolver: zodResolver(teacherSchema),
+    defaultValues: teacher ? { ...teacher } : { ...EMPTY_TEACHER }
+  });
+
+  const currentSpecialties = watch('specialties') || [];
+  const currentColor = watch('color');
 
   function toggleSpecialty(s: DanceStyle) {
-    setForm(f => ({
-      ...f,
-      specialties: f.specialties.includes(s)
-        ? f.specialties.filter(x => x !== s)
-        : [...f.specialties, s],
-    }));
+    const newSpecs = currentSpecialties.includes(s)
+      ? currentSpecialties.filter(x => x !== s)
+      : [...currentSpecialties, s];
+    setValue('specialties', newSpecs);
   }
 
   return (
@@ -618,51 +634,49 @@ function EditModal({
           <h2 className="text-base font-semibold text-gray-800">
             {teacher ? 'Modifier le professeur' : 'Nouveau professeur'}
           </h2>
-          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
+          <button type="button" onClick={onClose}><X size={18} className="text-gray-400" /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <form onSubmit={handleSubmit(onSave)} className="flex-1 overflow-y-auto flex flex-col">
+          <div className="p-5 space-y-4 flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                value={form.firstName}
-                onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.firstName ? 'border-red-400' : 'border-gray-200'}`}
+                {...register('firstName')}
               />
+              {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                value={form.lastName}
-                onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.lastName ? 'border-red-400' : 'border-gray-200'}`}
+                {...register('lastName')}
               />
+              {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
-                type="email"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.email ? 'border-red-400' : 'border-gray-200'}`}
+                {...register('email')}
               />
+              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                value={form.phone}
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                {...register('phone')}
               />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Bio / Notes</label>
               <textarea
                 rows={2}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
-                value={form.bio ?? ''}
-                onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+                {...register('bio')}
               />
             </div>
           </div>
@@ -672,10 +686,11 @@ function EditModal({
             <div className="flex gap-2 flex-wrap">
               {COLORS.map(c => (
                 <button
+                  type="button"
                   key={c}
-                  className={`w-7 h-7 rounded-full border-2 transition-all ${form.color === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
+                  className={`w-7 h-7 rounded-full border-2 transition-all ${currentColor === c ? 'border-gray-800 scale-110' : 'border-transparent'}`}
                   style={{ backgroundColor: c }}
-                  onClick={() => setForm(f => ({ ...f, color: c }))}
+                  onClick={() => setValue('color', c)}
                 />
               ))}
             </div>
@@ -686,10 +701,11 @@ function EditModal({
             <div className="flex flex-wrap gap-2">
               {STYLES.map(s => (
                 <button
+                  type="button"
                   key={s}
                   onClick={() => toggleSpecialty(s)}
                   className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                    form.specialties.includes(s)
+                    currentSpecialties.includes(s)
                       ? 'bg-purple-600 text-white border-purple-600'
                       : 'border-gray-200 text-gray-600 hover:border-purple-300'
                   }`}
@@ -699,20 +715,20 @@ function EditModal({
               ))}
             </div>
           </div>
-        </div>
+          </div>
 
         <div className="p-4 border-t border-gray-100 flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">
+            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">
             Annuler
           </button>
           <button
-            onClick={() => onSave(form)}
-            disabled={!form.firstName.trim() || !form.lastName.trim()}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-40"
+              type="submit"
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700"
           >
             Enregistrer
           </button>
         </div>
+        </form>
       </div>
     </div>
   );
