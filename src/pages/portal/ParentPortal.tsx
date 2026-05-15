@@ -1,18 +1,45 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { format, parseISO, differenceInYears } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ChevronRight, Calendar, Star, Music2, LogOut } from 'lucide-react';
+import { ChevronRight, Calendar, Star, Music2, LogOut, UserPlus, X } from 'lucide-react';
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
 
 export default function ParentPortal() {
-  const { currentUser, logout } = useAuth();
-  const { students, courseEnrollments, courses, registrations, proSessions } = useApp();
+  const { currentUser, logout, linkStudentToParent } = useAuth();
+  const { students, courseEnrollments, courses, registrations, proSessions, addStudent } = useApp();
   const navigate = useNavigate();
+
+  const [showAddChild, setShowAddChild] = useState(false);
+  const [childForm, setChildForm] = useState({ firstName: '', lastName: '', birthDate: '' });
+  const [saving, setSaving] = useState(false);
 
   if (!currentUser) return null;
 
   const myStudents = students.filter(s => currentUser.studentIds.includes(s.id));
+
+  async function handleAddChild() {
+    if (!childForm.firstName.trim() || !childForm.lastName.trim()) return;
+    setSaving(true);
+    const newId = generateId();
+    await addStudent({
+      id: newId,
+      firstName: childForm.firstName.trim(),
+      lastName: childForm.lastName.trim(),
+      birthDate: childForm.birthDate,
+      parentEmail: currentUser!.email,
+      parentPhone: '',
+    });
+    await linkStudentToParent(newId);
+    setChildForm({ firstName: '', lastName: '', birthDate: '' });
+    setShowAddChild(false);
+    setSaving(false);
+  }
 
   function getStudentCourseCount(studentId: string) {
     return courseEnrollments.filter(e => e.studentId === studentId && e.status === 'active').length;
@@ -66,9 +93,17 @@ export default function ParentPortal() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Ma famille</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Sélectionnez un membre pour voir son planning et ses cours.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Ma famille</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Sélectionnez un membre pour voir son planning et ses cours.</p>
+          </div>
+          <button
+            onClick={() => setShowAddChild(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-medium whitespace-nowrap"
+          >
+            <UserPlus size={15} /> Ajouter un enfant
+          </button>
         </div>
 
         {myStudents.length === 0 ? (
@@ -154,6 +189,57 @@ export default function ParentPortal() {
           </div>
         </div>
       </main>
+
+      {showAddChild && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-bold text-gray-800">Ajouter un enfant</h2>
+              <button onClick={() => setShowAddChild(false)}><X size={20} className="text-gray-400" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    value={childForm.firstName}
+                    onChange={e => setChildForm(f => ({ ...f, firstName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    value={childForm.lastName}
+                    onChange={e => setChildForm(f => ({ ...f, lastName: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance</label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  value={childForm.birthDate}
+                  onChange={e => setChildForm(f => ({ ...f, birthDate: e.target.value }))}
+                />
+              </div>
+              <p className="text-xs text-gray-400">Une fois ajouté, vous pourrez lui demander des inscriptions aux cours depuis sa fiche.</p>
+            </div>
+            <div className="p-5 border-t border-gray-100 flex gap-3 justify-end">
+              <button onClick={() => setShowAddChild(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+              <button
+                onClick={handleAddChild}
+                disabled={saving || !childForm.firstName.trim() || !childForm.lastName.trim()}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Enregistrement...' : 'Ajouter'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

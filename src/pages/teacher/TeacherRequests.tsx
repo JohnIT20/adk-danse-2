@@ -1,18 +1,35 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { Bell, CheckCircle, XCircle, Clock, Info } from 'lucide-react';
+import { Bell, CheckCircle, XCircle, Clock, Info, BookOpen } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { ScheduleChangeRequest } from '../../types';
 
-type Tab = 'pending' | 'history';
+type Tab = 'pending' | 'enrollments' | 'history';
 
 export default function TeacherRequests() {
   const { currentUser } = useAuth();
-  const { changeRequests, updateChangeRequest, courses, teachers } = useApp();
+  const { changeRequests, updateChangeRequest, courses, teachers, courseEnrollments, updateCourseEnrollment, students } = useApp();
 
   const tid = currentUser?.teacherId ?? '';
+
+  // Course enrollment requests for this teacher's courses
+  const myCourseIds = courses.filter(c => c.teacherId === tid).map(c => c.id);
+  const pendingEnrollments = courseEnrollments.filter(e =>
+    myCourseIds.includes(e.courseId) && e.status === 'pending'
+  );
+
+  function validateEnrollment(id: string, decision: 'validated' | 'rejected') {
+    const enrollment = courseEnrollments.find(e => e.id === id);
+    if (!enrollment) return;
+    updateCourseEnrollment({
+      ...enrollment,
+      status: decision,
+      validatedAt: decision === 'validated' ? format(new Date(), 'yyyy-MM-dd') : undefined,
+      rejectedAt: decision === 'rejected' ? format(new Date(), 'yyyy-MM-dd') : undefined,
+    });
+  }
 
   // Requests where this teacher is the conflicting one (must respond)
   const incomingRequests = changeRequests.filter(r => r.conflictingTeacherId === tid);
@@ -56,8 +73,12 @@ export default function TeacherRequests() {
   return (
     <div className="space-y-5">
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {([['pending', `Reçues${pending.length > 0 ? ` (${pending.length})` : ''}`], ['history', 'Historique']] as [Tab, string][]).map(([t, label]) => (
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit flex-wrap">
+        {([
+          ['pending', `Planning${pending.length > 0 ? ` (${pending.length})` : ''}`],
+          ['enrollments', `Inscriptions cours${pendingEnrollments.length > 0 ? ` (${pendingEnrollments.length})` : ''}`],
+          ['history', 'Historique'],
+        ] as [Tab, string][]).map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -133,6 +154,66 @@ export default function TeacherRequests() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'enrollments' && (
+        <>
+          {pendingEnrollments.length === 0 ? (
+            <div className="bg-white rounded-xl p-8 text-center text-gray-400 shadow-sm border border-gray-100">
+              <BookOpen size={32} className="mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Aucune demande d'inscription en attente.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingEnrollments.map(enrollment => {
+                const course = courses.find(c => c.id === enrollment.courseId);
+                const student = students.find(s => s.id === enrollment.studentId);
+                return (
+                  <div key={enrollment.id} className="bg-white rounded-xl shadow-sm border border-orange-200 p-5">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <div className="font-semibold text-gray-800">
+                          {student?.firstName} {student?.lastName}
+                          {student?.birthDate && (
+                            <span className="ml-2 text-sm font-normal text-gray-400">
+                              (né(e) le {format(parseISO(student.birthDate), 'd MMMM yyyy', { locale: fr })})
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-0.5">
+                          Cours demandé : <strong>{course?.name}</strong>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {course?.dayOfWeek} · {course?.startTime}–{course?.endTime} · {course?.ageGroup} · {course?.level}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Demande du {format(parseISO(enrollment.enrolledAt), 'd MMMM yyyy', { locale: fr })}
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        <Clock size={10} /> En attente
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => validateEnrollment(enrollment.id, 'validated')}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                      >
+                        <CheckCircle size={15} /> Valider
+                      </button>
+                      <button
+                        onClick={() => validateEnrollment(enrollment.id, 'rejected')}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+                      >
+                        <XCircle size={15} /> Refuser
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </>

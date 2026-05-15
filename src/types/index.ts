@@ -184,7 +184,10 @@ export interface CourseEnrollment {
   courseId: string;
   studentId: string;
   enrolledAt: string;   // YYYY-MM-DD
-  status: 'active' | 'pending' | 'cancelled';
+  status: 'active' | 'pending' | 'validated' | 'rejected' | 'cancelled';
+  paymentStatus?: PaymentStatus;
+  validatedAt?: string;
+  rejectedAt?: string;
 }
 
 export type UserRole = 'admin' | 'teacher' | 'parent';

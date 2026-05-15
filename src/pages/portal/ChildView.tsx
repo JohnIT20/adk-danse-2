@@ -8,7 +8,7 @@ import {
 import { fr } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, ArrowLeft, Star, Shirt, Calendar,
-  CheckCircle, Euro, Plus, X, AlertCircle,
+  CheckCircle, Euro, Plus, X, AlertCircle, CreditCard, Clock, XCircle,
 } from 'lucide-react';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -59,17 +59,22 @@ export default function ChildView() {
 
   const age = student.birthDate ? differenceInYears(new Date(), parseISO(student.birthDate)) : null;
 
-  // My enrollments
-  const myEnrollments = courseEnrollments.filter(e => e.studentId === studentId && e.status === 'active');
+  // All my enrollments (active, pending, validated)
+  const myEnrollments = courseEnrollments.filter(e =>
+    e.studentId === studentId && (e.status === 'active' || e.status === 'pending' || e.status === 'validated')
+  );
   const myCourses = myEnrollments.map(e => courses.find(c => c.id === e.courseId)).filter(Boolean) as typeof courses;
 
   // My pro registrations
   const myProRegs = registrations.filter(r => r.studentId === studentId);
   const myProSessions = myProRegs.map(r => proSessions.find(s => s.id === r.sessionId)).filter(Boolean) as typeof proSessions;
 
-  // Available courses not yet enrolled
+  // Available courses not yet enrolled (exclude all active statuses)
+  const allMyEnrollmentCourseIds = courseEnrollments
+    .filter(e => e.studentId === studentId && e.status !== 'cancelled' && e.status !== 'rejected')
+    .map(e => e.courseId);
   const availableCourses = courses.filter(c =>
-    c.active && !myEnrollments.find(e => e.courseId === c.id)
+    c.active && !allMyEnrollmentCourseIds.includes(c.id)
   );
 
   // Available pro sessions not yet registered
@@ -105,6 +110,7 @@ export default function ChildView() {
       studentId: studentId!,
       enrolledAt: format(new Date(), 'yyyy-MM-dd'),
       status: 'pending',
+      paymentStatus: 'pending',
     });
     setShowEnrollModal(false);
   }
@@ -112,6 +118,12 @@ export default function ChildView() {
   function unenroll(courseId: string) {
     const enrollment = myEnrollments.find(e => e.courseId === courseId);
     if (enrollment) deleteCourseEnrollment(enrollment.id);
+  }
+
+  function markCoursePaid(enrollmentId: string) {
+    const enrollment = courseEnrollments.find(e => e.id === enrollmentId);
+    if (!enrollment) return;
+    updateCourseEnrollment({ ...enrollment, status: 'active', paymentStatus: 'paid' });
   }
 
   function registerForProSession(sessionId: string) {
@@ -157,7 +169,7 @@ export default function ChildView() {
         <div className="flex gap-1 min-w-max">
           {([
             ['calendar', 'Planning', <Calendar size={14} />],
-            ['courses', `Cours (${myCourses.length})`, <CheckCircle size={14} />],
+            ['courses', `Cours (${myEnrollments.length})`, <CheckCircle size={14} />],
             ['sessions', `Sessions pro (${myProRegs.length})`, <Star size={14} />],
             ['attire', 'Tenues', <Shirt size={14} />],
           ] as [ViewMode, string, React.ReactNode][]).map(([v, label, icon]) => (
@@ -284,7 +296,7 @@ export default function ChildView() {
         {view === 'courses' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">{myCourses.length} cours inscrits</p>
+              <p className="text-sm text-gray-500">{myEnrollments.filter(e => e.status === 'active').length} cours actifs · {myEnrollments.filter(e => e.status === 'pending').length} en attente · {myEnrollments.filter(e => e.status === 'validated').length} à payer</p>
               <button
                 onClick={() => setShowEnrollModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-medium"
@@ -300,40 +312,65 @@ export default function ChildView() {
             )}
 
             <div className="space-y-3">
-              {myCourses.map(c => {
+              {myEnrollments.map(enrollment => {
+                const c = courses.find(x => x.id === enrollment.courseId);
+                if (!c) return null;
                 const teacher = teachers.find(t => t.id === c.teacherId);
-                const enrollment = myEnrollments.find(e => e.courseId === c.id);
+                const isValidated = enrollment.status === 'validated';
+                const isPending = enrollment.status === 'pending';
+                const isActive = enrollment.status === 'active';
                 return (
-                  <div key={c.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-start gap-3">
-                    <div className="w-1.5 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: teacher?.color ?? '#7C3AED' }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-gray-800">{c.name}</div>
-                      <div className="text-sm text-gray-500 mt-0.5">
-                        {c.dayOfWeek} · {c.startTime}–{c.endTime} · {c.room}
+                  <div key={enrollment.id} className={`bg-white rounded-2xl border p-4 shadow-sm flex flex-col gap-3 ${isValidated ? 'border-green-200' : 'border-gray-100'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-1.5 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: teacher?.color ?? '#7C3AED' }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-gray-800">{c.name}</div>
+                        <div className="text-sm text-gray-500 mt-0.5">
+                          {c.dayOfWeek} · {c.startTime}–{c.endTime} · {c.room}
+                        </div>
+                        {teacher && (
+                          <div className="text-xs text-gray-400 mt-0.5">Professeur : {teacher.firstName} {teacher.lastName}</div>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{c.style}</span>
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{c.level}</span>
+                          {c.price > 0 && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                              <Euro size={10} />{c.price}{c.priceLabel}
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Clock size={10} /> En attente validation</span>
+                          )}
+                          {isActive && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle size={10} /> Inscrit</span>
+                          )}
+                        </div>
                       </div>
-                      {teacher && (
-                        <div className="text-xs text-gray-400 mt-0.5">Professeur : {teacher.firstName} {teacher.lastName}</div>
+                      {(isPending || isActive) && (
+                        <button
+                          onClick={() => unenroll(c.id)}
+                          className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                          title="Annuler la demande"
+                        >
+                          <X size={15} />
+                        </button>
                       )}
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{c.style}</span>
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{c.level}</span>
-                        {c.price > 0 && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                            <Euro size={10} />{c.price}{c.priceLabel}
-                          </span>
-                        )}
-                        {enrollment && enrollment.status === 'pending' && (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">En attente validation</span>
-                        )}
-                      </div>
                     </div>
-                    <button
-                      onClick={() => unenroll(c.id)}
-                      className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                      title="Se désinscrire"
-                    >
-                      <X size={15} />
-                    </button>
+                    {isValidated && enrollment.paymentStatus === 'pending' && (
+                      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="text-sm text-green-800 flex items-center gap-2">
+                          <CreditCard size={15} className="text-green-600 flex-shrink-0" />
+                          <span>Inscription validée — paiement requis pour confirmer la place.</span>
+                        </div>
+                        <button
+                          onClick={() => markCoursePaid(enrollment.id)}
+                          className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 whitespace-nowrap font-medium"
+                        >
+                          Confirmer le paiement
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

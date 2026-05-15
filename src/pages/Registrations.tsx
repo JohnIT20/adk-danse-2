@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle, BookOpen, Clock } from 'lucide-react';
 import type { Registration, RegistrationStatus, PaymentStatus } from '../types';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -32,8 +32,11 @@ const PAYMENT_COLORS: Record<PaymentStatus, string> = {
   refunded: 'bg-blue-50 text-blue-600',
 };
 
+type MainTab = 'pro' | 'courses';
+
 export default function Registrations() {
-  const { proSessions, registrations, students, addRegistration, updateRegistration, deleteRegistration, addStudent } = useApp();
+  const { proSessions, registrations, students, addRegistration, updateRegistration, deleteRegistration, addStudent, courseEnrollments, updateCourseEnrollment, courses, teachers } = useApp();
+  const [mainTab, setMainTab] = useState<MainTab>('courses');
   const [filterSession, setFilterSession] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -94,8 +97,169 @@ export default function Registrations() {
   const pendingCount = registrations.filter(r => r.status === 'pending').length;
   const pendingPaymentCount = registrations.filter(r => r.paymentStatus === 'pending' && r.status === 'validated').length;
 
+  // Course enrollments
+  const pendingCourseEnrollments = courseEnrollments.filter(e => e.status === 'pending');
+  const validatedAwaitingPayment = courseEnrollments.filter(e => e.status === 'validated' && e.paymentStatus === 'pending');
+
+  function validateCourseEnrollment(id: string, decision: 'validated' | 'rejected') {
+    const enrollment = courseEnrollments.find(e => e.id === id);
+    if (!enrollment) return;
+    updateCourseEnrollment({
+      ...enrollment,
+      status: decision,
+      validatedAt: decision === 'validated' ? format(new Date(), 'yyyy-MM-dd') : undefined,
+      rejectedAt: decision === 'rejected' ? format(new Date(), 'yyyy-MM-dd') : undefined,
+    });
+  }
+
+  function markCourseEnrollmentPaid(id: string) {
+    const enrollment = courseEnrollments.find(e => e.id === id);
+    if (!enrollment) return;
+    updateCourseEnrollment({ ...enrollment, status: 'active', paymentStatus: 'paid' });
+  }
+
   return (
     <div className="space-y-4">
+      {/* Main tab switcher */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        <button
+          onClick={() => setMainTab('courses')}
+          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'courses' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <BookOpen size={14} /> Inscriptions cours
+          {pendingCourseEnrollments.length > 0 && (
+            <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCourseEnrollments.length}</span>
+          )}
+        </button>
+        <button
+          onClick={() => setMainTab('pro')}
+          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'pro' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Sessions pro
+          {pendingCount > 0 && (
+            <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCount}</span>
+          )}
+        </button>
+      </div>
+
+      {/* ===== COURSE ENROLLMENTS ===== */}
+      {mainTab === 'courses' && (
+        <div className="space-y-4">
+          {pendingCourseEnrollments.length > 0 && (
+            <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-800">
+              <AlertCircle size={18} className="text-orange-500 flex-shrink-0" />
+              <span><strong>{pendingCourseEnrollments.length} demande(s)</strong> en attente de validation.</span>
+            </div>
+          )}
+          {validatedAwaitingPayment.length > 0 && (
+            <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+              <CreditCard size={18} className="text-blue-500 flex-shrink-0" />
+              <span><strong>{validatedAwaitingPayment.length} paiement(s)</strong> en attente pour des inscriptions validées.</span>
+            </div>
+          )}
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr className="text-xs text-gray-500 uppercase tracking-wide">
+                    <th className="px-4 py-3 text-left">Élève</th>
+                    <th className="px-4 py-3 text-left">Cours demandé</th>
+                    <th className="px-4 py-3 text-left">Date demande</th>
+                    <th className="px-4 py-3 text-left">Statut</th>
+                    <th className="px-4 py-3 text-left">Paiement</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {courseEnrollments.filter(e => e.status !== 'cancelled').length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-sm">Aucune demande d'inscription cours.</td></tr>
+                  )}
+                  {courseEnrollments
+                    .filter(e => e.status !== 'cancelled')
+                    .sort((a, b) => b.enrolledAt.localeCompare(a.enrolledAt))
+                    .map(enrollment => {
+                      const student = students.find(s => s.id === enrollment.studentId);
+                      const course = courses.find(c => c.id === enrollment.courseId);
+                      const teacher = teachers.find(t => t.id === course?.teacherId);
+                      const statusLabel: Record<string, string> = {
+                        pending: 'En attente', validated: 'Validé', active: 'Actif', rejected: 'Refusé', cancelled: 'Annulé',
+                      };
+                      const statusColor: Record<string, string> = {
+                        pending: 'bg-orange-100 text-orange-700', validated: 'bg-green-100 text-green-700',
+                        active: 'bg-purple-100 text-purple-700', rejected: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500',
+                      };
+                      return (
+                        <tr key={enrollment.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-sm text-gray-800">{student?.firstName} {student?.lastName}</div>
+                            <div className="text-xs text-gray-400">{student?.parentEmail}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-gray-700 max-w-[200px] truncate">{course?.name}</div>
+                            <div className="text-xs text-gray-400">{course?.dayOfWeek} · {course?.startTime}–{course?.endTime}</div>
+                            {teacher && <div className="text-xs text-gray-400">Prof : {teacher.firstName} {teacher.lastName}</div>}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {format(parseISO(enrollment.enrolledAt), 'd MMM yyyy', { locale: fr })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[enrollment.status]}`}>
+                              {statusLabel[enrollment.status]}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {enrollment.status === 'active' ? (
+                              <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700">Payé</span>
+                            ) : enrollment.status === 'validated' ? (
+                              <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-600 flex items-center gap-1 w-fit">
+                                <Clock size={10} /> En attente
+                              </span>
+                            ) : <span className="text-xs text-gray-400">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              {enrollment.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => validateCourseEnrollment(enrollment.id, 'validated')}
+                                    className="p-1.5 text-green-500 hover:bg-green-50 rounded-lg"
+                                    title="Valider"
+                                  >
+                                    <CheckCircle size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => validateCourseEnrollment(enrollment.id, 'rejected')}
+                                    className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"
+                                    title="Refuser"
+                                  >
+                                    <XCircle size={15} />
+                                  </button>
+                                </>
+                              )}
+                              {enrollment.status === 'validated' && enrollment.paymentStatus === 'pending' && (
+                                <button
+                                  onClick={() => markCourseEnrollmentPaid(enrollment.id)}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                                >
+                                  <CreditCard size={12} /> Marquer payé
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== PRO SESSIONS (existing) ===== */}
+      {mainTab === 'pro' && (
+      <div className="space-y-4">
       {/* Alerts */}
       {pendingCount > 0 && (
         <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-800">
@@ -305,6 +469,8 @@ export default function Registrations() {
             </div>
           </div>
         </div>
+      )}
+      </div>
       )}
     </div>
   );

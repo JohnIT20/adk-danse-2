@@ -7,6 +7,7 @@ interface AuthContextType {
   allAccounts: UserAccount[];
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
+  linkStudentToParent: (studentId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -76,8 +77,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(null);
   }, []);
 
+  const linkStudentToParent = useCallback(async (studentId: string) => {
+    if (!currentUser) return;
+    const updatedIds = [...currentUser.studentIds, studentId];
+    await supabase.from('profiles').update({ student_ids: updatedIds }).eq('id', currentUser.id);
+    setCurrentUser(prev => prev ? { ...prev, studentIds: updatedIds } : prev);
+  }, [currentUser]);
+
   return (
-    <AuthContext.Provider value={{ currentUser, allAccounts: [], login, logout }}>
+    <AuthContext.Provider value={{ currentUser, allAccounts: [], login, logout, linkStudentToParent }}>
       {!loading && children}
     </AuthContext.Provider>
   );
