@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { supabase } from '../../supabase';
 import type {
   Teacher, Course, ProSession, Student, Registration, CourseException, Spectacle, CourseEnrollment,
   Room, ScheduleChangeRequest, RepresentationSession,
@@ -72,6 +73,7 @@ interface AppContextType {
   deleteRepresentation: (id: string) => void;
 
   resetToDefaults: () => void;
+  initializeDb: () => Promise<void>;
 }
 
 export const useApp = create<AppContextType>()(
@@ -89,20 +91,32 @@ export const useApp = create<AppContextType>()(
       changeRequests: defaultChangeRequests,
       representations: defaultRepresentations,
 
-      addTeacher: (t) => set((state) => ({ teachers: [...state.teachers, t] })),
-      updateTeacher: (t) => set((state) => ({ teachers: state.teachers.map((x) => (x.id === t.id ? t : x)) })),
-      deleteTeacher: (id) => set((state) => ({ teachers: state.teachers.filter((x) => x.id !== id) })),
+      initializeDb: async () => {
+        const { data: teachers } = await supabase.from('teachers').select('*');
+        const { data: courses } = await supabase.from('courses').select('*');
+        const { data: students } = await supabase.from('students').select('*');
 
-      addCourse: (c) => set((state) => ({ courses: [...state.courses, c] })),
-      updateCourse: (c) => set((state) => ({ courses: state.courses.map((x) => (x.id === c.id ? c : x)) })),
-      deleteCourse: (id) => set((state) => ({ courses: state.courses.filter((x) => x.id !== id) })),
+        set((state) => ({
+          teachers: teachers || state.teachers,
+          courses: courses || state.courses,
+          students: students || state.students,
+        }));
+      },
+
+      addTeacher: async (t) => { set((state) => ({ teachers: [...state.teachers, t] })); await supabase.from('teachers').insert(t); },
+      updateTeacher: async (t) => { set((state) => ({ teachers: state.teachers.map((x) => (x.id === t.id ? t : x)) })); await supabase.from('teachers').update(t).eq('id', t.id); },
+      deleteTeacher: async (id) => { set((state) => ({ teachers: state.teachers.filter((x) => x.id !== id) })); await supabase.from('teachers').delete().eq('id', id); },
+
+      addCourse: async (c) => { set((state) => ({ courses: [...state.courses, c] })); await supabase.from('courses').insert(c); },
+      updateCourse: async (c) => { set((state) => ({ courses: state.courses.map((x) => (x.id === c.id ? c : x)) })); await supabase.from('courses').update(c).eq('id', c.id); },
+      deleteCourse: async (id) => { set((state) => ({ courses: state.courses.filter((x) => x.id !== id) })); await supabase.from('courses').delete().eq('id', id); },
 
       addProSession: (s) => set((state) => ({ proSessions: [...state.proSessions, s] })),
       updateProSession: (s) => set((state) => ({ proSessions: state.proSessions.map((x) => (x.id === s.id ? s : x)) })),
       deleteProSession: (id) => set((state) => ({ proSessions: state.proSessions.filter((x) => x.id !== id) })),
 
-      addStudent: (s) => set((state) => ({ students: [...state.students, s] })),
-      updateStudent: (s) => set((state) => ({ students: state.students.map((x) => (x.id === s.id ? s : x)) })),
+      addStudent: async (s) => { set((state) => ({ students: [...state.students, s] })); await supabase.from('students').insert(s); },
+      updateStudent: async (s) => { set((state) => ({ students: state.students.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('students').update(s).eq('id', s.id); },
 
       addRegistration: (r) => set((state) => ({ registrations: [...state.registrations, r] })),
       updateRegistration: (r) => set((state) => ({ registrations: state.registrations.map((x) => (x.id === r.id ? r : x)) })),

@@ -1,6 +1,7 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { useApp } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 
@@ -106,6 +107,12 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const initializeDb = useApp(state => state.initializeDb);
+
+  useEffect(() => {
+    initializeDb();
+  }, [initializeDb]);
+
   return (
     <>
       <Toaster position="top-right" richColors />

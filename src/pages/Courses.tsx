@@ -3,6 +3,9 @@ import { useApp } from '../context/AppContext';
 import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Euro } from 'lucide-react';
 import type { Course, DanceStyle, Level, AgeGroup, DayOfWeek, AttireItem, AttireCategory } from '../types';
 import { format } from 'date-fns';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
 const STYLES: DanceStyle[] = ['Éveil à la danse', 'Danse classique', 'Jazz', 'Contemporain', 'Hip-hop', 'Break', 'Ragga', 'Girly', 'Pomdance', 'Line Dance', 'Pole Dance'];
 const LEVELS: Level[] = ['Éveil', 'Débutant', 'Intermédiaire', 'Avancé', 'Tous niveaux'];
@@ -30,47 +33,97 @@ const emptyAttire: Omit<AttireItem, 'id'> = {
   name: '', description: '', category: 'Tenue', mandatory: true, color: '', brand: '', notes: '',
 };
 
+const courseSchema = z.object({
+  name: z.string().min(1, "Le nom du cours est requis"),
+  style: z.string(),
+  level: z.string(),
+  ageGroup: z.string(),
+  teacherId: z.string(),
+  room: z.string().min(1, "La salle est requise"),
+  dayOfWeek: z.string(),
+  startTime: z.string().min(1, "Heure requise"),
+  endTime: z.string().min(1, "Heure requise"),
+  capacity: z.coerce.number().min(1, "Capacité minimum de 1"),
+  price: z.coerce.number().min(0, "Prix invalide"),
+  priceLabel: z.string(),
+  description: z.string().optional(),
+  active: z.boolean(),
+});
+type CourseFormValues = z.infer<typeof courseSchema>;
+
+const attireSchema = z.object({
+  category: z.enum(['Tenue', 'Chaussures', 'Accessoire', 'Costume de spectacle']),
+  mandatory: z.boolean(),
+  name: z.string().min(1, "Le nom de l'article est requis"),
+  description: z.string().optional(),
+  color: z.string().optional(),
+  brand: z.string().optional(),
+  notes: z.string().optional(),
+});
+type AttireFormValues = z.infer<typeof attireSchema>;
+
 export default function Courses() {
   const { courses, teachers, addCourse, updateCourse, deleteCourse, courseExceptions, addCourseException, deleteCourseException } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Course | null>(null);
-  const [form, setForm] = useState<Omit<Course, 'id'>>(emptyCourse);
+  const [attireList, setAttireList] = useState<AttireItem[]>([]);
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CourseFormValues>({
+    resolver: zodResolver(courseSchema),
+    defaultValues: emptyCourse as unknown as CourseFormValues
+  });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [exceptionCourse, setExceptionCourse] = useState<Course | null>(null);
   const [exForm, setExForm] = useState({ originalDate: format(new Date(), 'yyyy-MM-dd'), isCancelled: true, newDate: '', newStartTime: '', newEndTime: '', reason: '' });
-  const [attireInput, setAttireInput] = useState<Omit<AttireItem, 'id'>>(emptyAttire);
   const [showAttireForm, setShowAttireForm] = useState(false);
+
+  const attireForm = useForm<AttireFormValues>({
+    resolver: zodResolver(attireSchema),
+    defaultValues: { category: 'Tenue', mandatory: true, name: '', description: '', color: '', brand: '', notes: '' }
+  });
 
   function openNew() {
     setEditing(null);
-    setForm({ ...emptyCourse, teacherId: teachers[0]?.id ?? '' });
+    setAttireList([]);
+    reset({ ...emptyCourse, teacherId: teachers[0]?.id ?? '' } as CourseFormValues);
+    attireForm.reset();
     setShowAttireForm(false);
     setShowModal(true);
   }
 
   function openEdit(c: Course) {
     setEditing(c);
-    setForm({ ...c });
+    setAttireList(c.attire || []);
+    reset({
+      name: c.name, style: c.style, level: c.level, ageGroup: c.ageGroup,
+      teacherId: c.teacherId, room: c.room, dayOfWeek: c.dayOfWeek, startTime: c.startTime,
+      endTime: c.endTime, capacity: c.capacity, price: c.price, priceLabel: c.priceLabel,
+      description: c.description ?? '', active: c.active
+    });
+    attireForm.reset();
     setShowAttireForm(false);
     setShowModal(true);
   }
 
-  function save() {
-    if (editing) updateCourse({ ...form, id: editing.id });
-    else addCourse({ ...form, id: generateId() });
+  function onSubmit(data: CourseFormValues) {
+    const courseData = { ...data, attire: attireList } as unknown as Omit<Course, 'id'>;
+    if (editing) updateCourse({ ...courseData, id: editing.id });
+    else addCourse({ ...courseData, id: generateId() });
     setShowModal(false);
   }
 
-  function addAttireItem() {
-    if (!attireInput.name.trim()) return;
-    setForm(f => ({ ...f, attire: [...f.attire, { ...attireInput, id: generateId() }] }));
-    setAttireInput(emptyAttire);
-    setShowAttireForm(false);
+  async function addAttireItem() {
+    const isValid = await attireForm.trigger();
+    if (isValid) {
+      const data = attireForm.getValues();
+      setAttireList(prev => [...prev, { ...data, description: data.description ?? '', id: generateId() } as AttireItem]);
+      attireForm.reset();
+      setShowAttireForm(false);
+    }
   }
 
   function removeAttireItem(id: string) {
-    setForm(f => ({ ...f, attire: f.attire.filter(a => a.id !== id) }));
+    setAttireList(prev => prev.filter(a => a.id !== id));
   }
 
   function openException(c: Course) {
@@ -222,10 +275,10 @@ export default function Courses() {
       {/* Course modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-800">{editing ? 'Modifier le cours' : 'Nouveau cours'}</h2>
-              <button onClick={() => setShowModal(false)}><X size={20} className="text-gray-400" /></button>
+            <h2 className="text-lg font-semibold text-gray-800">{editing ? 'Modifier le cours' : 'Nouveau cours'}</h2>
+            <button type="button" onClick={() => setShowModal(false)}><X size={20} className="text-gray-400" /></button>
             </div>
             <div className="p-5 space-y-5">
 
@@ -235,34 +288,35 @@ export default function Courses() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nom du cours *</label>
-                    <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Danse classique - Débutants 6-8 ans" />
+                <input className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
+                  {...register('name')} placeholder="Ex: Danse classique - Débutants 6-8 ans" />
+                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Style de danse</label>
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.style} onChange={e => setForm(f => ({ ...f, style: e.target.value as DanceStyle }))}>
+                  {...register('style')}>
                       {STYLES.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Niveau</label>
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.level} onChange={e => setForm(f => ({ ...f, level: e.target.value as Level }))}>
+                  {...register('level')}>
                       {LEVELS.map(l => <option key={l}>{l}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Groupe d'âge</label>
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.ageGroup} onChange={e => setForm(f => ({ ...f, ageGroup: e.target.value as AgeGroup }))}>
+                  {...register('ageGroup')}>
                       {AGE_GROUPS.map(a => <option key={a}>{a}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Professeur assigné</label>
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.teacherId} onChange={e => setForm(f => ({ ...f, teacherId: e.target.value }))}>
+                  {...register('teacherId')}>
                       <option value="">— Aucun —</option>
                       {teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
                     </select>
@@ -270,7 +324,7 @@ export default function Courses() {
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                     <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
-                      value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                  {...register('description')} />
                   </div>
                 </div>
               </section>
@@ -282,32 +336,33 @@ export default function Courses() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Jour de la semaine</label>
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.dayOfWeek} onChange={e => setForm(f => ({ ...f, dayOfWeek: e.target.value as DayOfWeek }))}>
+                  {...register('dayOfWeek')}>
                       {DAYS.map(d => <option key={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Salle</label>
-                    <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.room} onChange={e => setForm(f => ({ ...f, room: e.target.value }))} placeholder="Ex: Salle A, Grande Salle..." />
+                <input className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.room ? 'border-red-400' : 'border-gray-200'}`}
+                  {...register('room')} placeholder="Ex: Salle A, Grande Salle..." />
+                {errors.room && <p className="text-red-500 text-xs mt-1">{errors.room.message}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Heure de début</label>
-                    <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} />
+                <input type="time" className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.startTime ? 'border-red-400' : 'border-gray-200'}`}
+                  {...register('startTime')} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Heure de fin</label>
-                    <input type="time" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} />
+                <input type="time" className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.endTime ? 'border-red-400' : 'border-gray-200'}`}
+                  {...register('endTime')} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Capacité max (élèves)</label>
-                    <input type="number" min={1} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: +e.target.value }))} />
+                <input type="number" min={1} className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.capacity ? 'border-red-400' : 'border-gray-200'}`}
+                  {...register('capacity')} />
                   </div>
                   <div className="flex items-center gap-2 pt-5">
-                    <input type="checkbox" id="active" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} className="rounded w-4 h-4 accent-purple-600" />
+                <input type="checkbox" id="active" {...register('active')} className="rounded w-4 h-4 accent-purple-600" />
                     <label htmlFor="active" className="text-sm text-gray-700">Cours actif (visible au planning)</label>
                   </div>
                 </div>
@@ -321,14 +376,14 @@ export default function Courses() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€)</label>
                     <div className="relative">
                       <Euro size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="number" min={0} step={0.5} className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                        value={form.price} onChange={e => setForm(f => ({ ...f, price: +e.target.value }))} placeholder="0" />
+                  <input type="number" min={0} step={0.5} className={`w-full border rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${errors.price ? 'border-red-400' : 'border-gray-200'}`}
+                    {...register('price')} placeholder="0" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Période</label>
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                      value={form.priceLabel} onChange={e => setForm(f => ({ ...f, priceLabel: e.target.value }))}>
+                  {...register('priceLabel')}>
                       {PRICE_LABELS.map(l => <option key={l}>{l}</option>)}
                     </select>
                   </div>
@@ -341,21 +396,21 @@ export default function Courses() {
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
                     <Shirt size={13} /> Tenues & équipement requis pour les élèves
                   </p>
-                  <button onClick={() => setShowAttireForm(v => !v)} className="text-xs text-purple-600 flex items-center gap-1 hover:text-purple-800">
+              <button type="button" onClick={() => setShowAttireForm(v => !v)} className="text-xs text-purple-600 flex items-center gap-1 hover:text-purple-800">
                     <Plus size={12} /> Ajouter
                   </button>
                 </div>
 
                 {/* Existing items */}
-                {form.attire.length > 0 && (
+            {attireList.length > 0 && (
                   <div className="space-y-2 mb-3">
-                    {form.attire.map(a => (
+                {attireList.map(a => (
                       <div key={a.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 text-sm">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${CATEGORY_COLORS[a.category]}`}>{a.category}</span>
                         <span className="font-medium text-gray-700">{a.name}</span>
                         {!a.mandatory && <span className="text-xs text-gray-400">(optionnel)</span>}
                         {a.color && <span className="text-xs text-gray-400">· {a.color}</span>}
-                        <button onClick={() => removeAttireItem(a.id)} className="ml-auto text-red-400 hover:text-red-600"><X size={13} /></button>
+                    <button type="button" onClick={() => removeAttireItem(a.id)} className="ml-auto text-red-400 hover:text-red-600"><X size={13} /></button>
                       </div>
                     ))}
                   </div>
@@ -368,48 +423,44 @@ export default function Courses() {
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Catégorie</label>
                         <select className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          value={attireInput.category} onChange={e => setAttireInput(a => ({ ...a, category: e.target.value as AttireCategory }))}>
+                      {...attireForm.register('category')}>
                           {ATTIRE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                         </select>
                       </div>
                       <div className="flex items-center gap-2 pt-4">
-                        <input type="checkbox" id="mandatory" checked={attireInput.mandatory} onChange={e => setAttireInput(a => ({ ...a, mandatory: e.target.checked }))} className="rounded w-4 h-4 accent-purple-600" />
+                    <input type="checkbox" id="mandatory" {...attireForm.register('mandatory')} className="rounded w-4 h-4 accent-purple-600" />
                         <label htmlFor="mandatory" className="text-sm text-gray-700">Obligatoire</label>
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-600 mb-1">Nom de l'article *</label>
-                        <input className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          placeholder="Ex: Justaucorps, Chaussons, Collants..." value={attireInput.name}
-                          onChange={e => setAttireInput(a => ({ ...a, name: e.target.value }))} />
+                    <input className={`w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400 ${attireForm.formState.errors.name ? 'border-red-400' : 'border-gray-200'}`}
+                      placeholder="Ex: Justaucorps, Chaussons, Collants..." {...attireForm.register('name')} />
+                    {attireForm.formState.errors.name && <p className="text-red-500 text-xs mt-1">{attireForm.formState.errors.name.message}</p>}
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-600 mb-1">Description précise</label>
                         <input className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          placeholder="Ex: Justaucorps lilas, sans manches, col rond..." value={attireInput.description}
-                          onChange={e => setAttireInput(a => ({ ...a, description: e.target.value }))} />
+                      placeholder="Ex: Justaucorps lilas, sans manches, col rond..." {...attireForm.register('description')} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Couleur requise</label>
                         <input className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          placeholder="Ex: Rose, Noir, Blanc..." value={attireInput.color ?? ''}
-                          onChange={e => setAttireInput(a => ({ ...a, color: e.target.value }))} />
+                      placeholder="Ex: Rose, Noir, Blanc..." {...attireForm.register('color')} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Marque recommandée</label>
                         <input className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          placeholder="Ex: Bloch, Freed, Capezio..." value={attireInput.brand ?? ''}
-                          onChange={e => setAttireInput(a => ({ ...a, brand: e.target.value }))} />
+                      placeholder="Ex: Bloch, Freed, Capezio..." {...attireForm.register('brand')} />
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-600 mb-1">Notes / remarques</label>
                         <input className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
-                          placeholder="Commande groupée possible, achat via l'école..." value={attireInput.notes ?? ''}
-                          onChange={e => setAttireInput(a => ({ ...a, notes: e.target.value }))} />
+                      placeholder="Commande groupée possible, achat via l'école..." {...attireForm.register('notes')} />
                       </div>
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setShowAttireForm(false)} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500">Annuler</button>
-                      <button onClick={addAttireItem} className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700">Ajouter l'article</button>
+                  <button type="button" onClick={() => setShowAttireForm(false)} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500">Annuler</button>
+                  <button type="button" onClick={addAttireItem} className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700">Ajouter l'article</button>
                     </div>
                   </div>
                 )}
@@ -417,12 +468,12 @@ export default function Courses() {
             </div>
 
             <div className="p-5 border-t border-gray-100 flex gap-3 justify-end">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
-              <button onClick={save} disabled={!form.name} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
+            <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+            <button type="submit" className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50">
                 Enregistrer
               </button>
             </div>
-          </div>
+      </form>
         </div>
       )}
 
