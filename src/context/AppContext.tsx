@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase } from '../../supabase';
+import { supabase } from '../lib/supabase';
 import type {
   Teacher, Course, ProSession, Student, Registration, CourseException, Spectacle, CourseEnrollment,
   Room, ScheduleChangeRequest, RepresentationSession,

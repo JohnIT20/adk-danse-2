@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ShieldAlert, ShieldCheck, User } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import type { UserRole } from '../types';
 
