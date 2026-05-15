@@ -24,18 +24,16 @@ export default function Login() {
     resolver: zodResolver(loginSchema)
   });
 
-  function onSubmit(data: LoginForm) {
+  async function onSubmit(data: LoginForm) {
     setLoading(true);
-    setTimeout(() => {
-      const result = login(data.email, data.password);
-      setLoading(false);
-      if (!result.ok) {
-        toast.error(result.error ?? 'Erreur de connexion.');
-        return;
-      }
-      toast.success('Connexion réussie !');
-      navigate('/');
-    }, 400);
+    const result = await login(data.email, data.password);
+    setLoading(false);
+    if (!result.ok) {
+      toast.error(result.error ?? 'Erreur de connexion.');
+      return;
+    }
+    toast.success('Connexion réussie !');
+    navigate('/');
   }
 
   return (
