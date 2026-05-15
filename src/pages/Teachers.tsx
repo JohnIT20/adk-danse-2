@@ -610,7 +610,7 @@ function EditModal({
 }: {
   teacher: Teacher | null;
   onClose: () => void;
-  onSave: (data: Omit<Teacher, 'id'>) => void;
+  onSave: (data: TeacherFormValues) => void;
 }) {
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<TeacherFormValues>({
     resolver: zodResolver(teacherSchema),
@@ -750,15 +750,21 @@ export default function Teachers() {
     // If editing from management modal, close it temporarily then reopen after save
   }
 
-  function handleSave(data: Omit<Teacher, 'id'>) {
+  function handleSave(data: TeacherFormValues) {
+    const payload: Omit<Teacher, 'id'> = {
+      ...data,
+      phone: data.phone ?? '',
+      specialties: data.specialties as DanceStyle[],
+    };
+
     if (editingTeacher && typeof editingTeacher === 'object') {
-      updateTeacher({ ...data, id: editingTeacher.id });
+      updateTeacher({ ...payload, id: editingTeacher.id });
       // Refresh managing teacher if open
       if (managingTeacher?.id === editingTeacher.id) {
-        setManagingTeacher({ ...data, id: editingTeacher.id });
+        setManagingTeacher({ ...payload, id: editingTeacher.id });
       }
     } else {
-      addTeacher({ ...data, id: genId() });
+      addTeacher({ ...payload, id: genId() });
     }
     setShowEdit(false);
   }
