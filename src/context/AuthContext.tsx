@@ -15,6 +15,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchProfile = useCallback(async (user: any) => {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    // Sécurité anti-blocage : on force le rôle admin pour vos adresses
+    const isAdminEmail = user.email === 'admin@adkdanse.be' || user.email === 'admin@annedkdanse.be';
+
+    if (profile) {
+      if (isAdminEmail && profile.role !== 'admin') {
+        await supabase.from('profiles').update({ role: 'admin' }).eq('id', user.id);
+        profile.role = 'admin';
+      }
+      setCurrentUser({ ...profile, password: '' } as UserAccount);
+    } else {
+      const role = isAdminEmail ? 'admin' : 'parent';
+      if (isAdminEmail) {
+        await supabase.from('profiles').insert({ id: user.id, email: user.email, role: 'admin', displayName: 'Administrateur' });
+      }
+      setCurrentUser({ id: user.id, email: user.email, password: '', role, displayName: user.email.split('@')[0], studentIds: [] });
+    }
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     // Vérifie la session au lancement de l'application
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -24,38 +50,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Écoute les connexions/déconnexions en temps réel
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) fetchProfile(session.user);
-      else {
+      if (session?.user) {
+        setLoading(true);
+        fetchProfile(session.user);
+      } else {
         setCurrentUser(null);
         setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (user: any) => {
-    // On récupère le vrai profil depuis la table "profiles" de Supabase
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (profile) {
-      setCurrentUser({ ...profile, password: '' } as UserAccount);
-    } else {
-      // Sécurité : Rôle parent par défaut le temps que le trigger fasse son travail
-      setCurrentUser({ id: user.id, email: user.email, password: '', role: 'parent', displayName: user.email.split('@')[0], studentIds: [] });
-    }
-    setLoading(false);
-  };
+  }, [fetchProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: "Email ou mot de passe incorrect." };
+    if (data.user) {
+      await fetchProfile(data.user);
+    }
     return { ok: true };
-  }, []);
+  }, [fetchProfile]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
