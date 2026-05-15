@@ -29,10 +29,6 @@ const emptyCourse: Omit<Course, 'id'> = {
   capacity: 15, price: 60, priceLabel: '/ mois', attire: [], active: true,
 };
 
-const emptyAttire: Omit<AttireItem, 'id'> = {
-  name: '', description: '', category: 'Tenue', mandatory: true, color: '', brand: '', notes: '',
-};
-
 const courseSchema = z.object({
   name: z.string().min(1, "Le nom du cours est requis"),
   style: z.string(),
