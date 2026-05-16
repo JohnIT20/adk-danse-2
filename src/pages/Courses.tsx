@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Euro } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Euro, ChevronRight } from 'lucide-react';
 import type { Course, DanceStyle, Level, AgeGroup, DayOfWeek, AttireItem, AttireCategory } from '../types';
 import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
@@ -58,6 +58,21 @@ const attireSchema = z.object({
 });
 type AttireFormValues = z.infer<typeof attireSchema>;
 
+const STYLE_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  'Éveil à la danse': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: '#ec4899' },
+  'Danse classique': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: '#7c3aed' },
+  'Jazz':            { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200',  dot: '#d97706' },
+  'Contemporain':    { bg: 'bg-teal-50',   text: 'text-teal-700',   border: 'border-teal-200',   dot: '#0d9488' },
+  'Hip-hop':         { bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200',   dot: '#2563eb' },
+  'Break':           { bg: 'bg-cyan-50',   text: 'text-cyan-700',   border: 'border-cyan-200',   dot: '#0891b2' },
+  'Ragga':           { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: '#ea580c' },
+  'Girly':           { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-200',   dot: '#e11d48' },
+  'Pomdance':        { bg: 'bg-fuchsia-50',text: 'text-fuchsia-700',border: 'border-fuchsia-200',dot: '#a21caf' },
+  'Line Dance':      { bg: 'bg-lime-50',   text: 'text-lime-700',   border: 'border-lime-200',   dot: '#65a30d' },
+  'Pole Dance':      { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: '#4338ca' },
+};
+const DEFAULT_STYLE_COLOR = { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', dot: '#6b7280' };
+
 export default function Courses() {
   const { courses, teachers, addCourse, updateCourse, deleteCourse, courseExceptions, addCourseException, deleteCourseException } = useApp();
   const [showModal, setShowModal] = useState(false);
@@ -68,6 +83,7 @@ export default function Courses() {
     defaultValues: emptyCourse as unknown as CourseFormValues
   });
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [exceptionCourse, setExceptionCourse] = useState<Course | null>(null);
   const [exForm, setExForm] = useState({ originalDate: format(new Date(), 'yyyy-MM-dd'), isCancelled: true, newDate: '', newStartTime: '', newEndTime: '', reason: '' });
@@ -134,138 +150,215 @@ export default function Courses() {
     setShowExceptionModal(false);
   }
 
+  // Helper: render a single course card
+  function renderCourseCard(c: typeof courses[number]) {
+    const teacher = teachers.find(t => t.id === c.teacherId);
+    const exceptions = courseExceptions.filter(e => e.courseId === c.id);
+    const isExpanded = expandedId === c.id;
+    return (
+      <div key={c.id} className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="p-4 flex items-start gap-3">
+          <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: teacher?.color ?? '#7C3AED' }} />
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="font-semibold text-gray-800">{c.name}</span>
+              {!c.active && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactif</span>}
+              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{c.level}</span>
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{c.ageGroup}</span>
+            </div>
+            <div className="text-sm text-gray-500">
+              {c.dayOfWeek} · {c.startTime}–{c.endTime} · {c.room}
+              {teacher && <> · <span style={{ color: teacher.color }}>{teacher.firstName} {teacher.lastName}</span></>}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
+              <span>{c.capacity} places max</span>
+              {c.price > 0 && (
+                <span className="flex items-center gap-0.5 text-green-600 font-medium">
+                  <Euro size={11} />{c.price}{c.priceLabel}
+                </span>
+              )}
+              {c.attire.length > 0 && (
+                <span className="flex items-center gap-0.5 text-purple-500">
+                  <Shirt size={11} />{c.attire.length} article(s) tenue
+                </span>
+              )}
+              {exceptions.length > 0 && (
+                <span className="text-orange-500">{exceptions.length} exception(s)</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => openException(c)} className="p-1.5 text-orange-400 hover:bg-orange-50 rounded-lg" title="Exception ponctuelle">
+              <AlertTriangle size={15} />
+            </button>
+            <button onClick={() => openEdit(c)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
+              <Pencil size={15} />
+            </button>
+            <button onClick={() => deleteCourse(c.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg">
+              <Trash2 size={15} />
+            </button>
+            <button onClick={() => setExpandedId(isExpanded ? null : c.id)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
+              {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </button>
+          </div>
+        </div>
+        {isExpanded && (
+          <div className="border-t border-gray-100 p-4 space-y-4">
+            {c.description && <p className="text-sm text-gray-600">{c.description}</p>}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                <Shirt size={14} className="text-purple-500" /> Tenue requise pour les élèves
+              </h3>
+              {c.attire.length === 0 ? (
+                <p className="text-xs text-gray-400">Aucune tenue définie.</p>
+              ) : (
+                <div className="space-y-2">
+                  {c.attire.map(a => (
+                    <div key={a.id} className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${CATEGORY_COLORS[a.category]}`}>
+                        {a.category}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-800">
+                          {a.name}
+                          {!a.mandatory && <span className="ml-1 text-xs text-gray-400">(optionnel)</span>}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{a.description}</div>
+                        {(a.color || a.brand) && (
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {a.color && <span>Couleur : {a.color}</span>}
+                            {a.color && a.brand && <span> · </span>}
+                            {a.brand && <span>Marque : {a.brand}</span>}
+                          </div>
+                        )}
+                        {a.notes && <div className="text-xs text-gray-400 italic mt-0.5">{a.notes}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {exceptions.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="text-orange-500" /> Exceptions / Modifications ponctuelles
+                </h3>
+                <div className="space-y-1">
+                  {exceptions.map(ex => (
+                    <div key={ex.id} className="text-xs flex items-center gap-2 bg-orange-50 rounded-lg p-2">
+                      <span className="font-medium text-gray-700">{ex.originalDate}</span>
+                      {ex.isCancelled ? (
+                        <span className="text-red-600 font-medium">Annulé</span>
+                      ) : (
+                        <span className="text-blue-600">→ Déplacé au {ex.newDate} {ex.newStartTime && `à ${ex.newStartTime}`}</span>
+                      )}
+                      {ex.reason && <span className="text-gray-400">({ex.reason})</span>}
+                      <button onClick={() => deleteCourseException(ex.id)} className="ml-auto text-red-400 hover:text-red-600">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Group active courses by style, keep inactive separate.
+  // Data-driven: group by the actual `style` value present in the data
+  // (works even if Supabase returns a value not in the predefined STYLES list).
+  const activeCourses = courses.filter(c => c.active);
+  const inactiveCourses = courses.filter(c => !c.active);
+  const presentStyles: string[] = Array.from(new Set(activeCourses.map(c => c.style ?? 'Autre')));
+  const KNOWN_STYLES: string[] = STYLES;
+  const styleOrder = presentStyles.sort((a, b) => {
+    const ia = KNOWN_STYLES.indexOf(a);
+    const ib = KNOWN_STYLES.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  const grouped = styleOrder.map(style => ({
+    style,
+    items: activeCourses.filter(c => (c.style ?? 'Autre') === style),
+  }));
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-gray-500">{courses.filter(c => c.active).length} cours actifs</p>
+        <p className="text-sm text-gray-500">
+          {activeCourses.length} cours actifs · {grouped.length} spécialité{grouped.length > 1 ? 's' : ''}
+        </p>
         <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
           <Plus size={16} /> Nouveau cours
         </button>
       </div>
 
-      <div className="space-y-3">
-        {courses.map(c => {
-          const teacher = teachers.find(t => t.id === c.teacherId);
-          const exceptions = courseExceptions.filter(e => e.courseId === c.id);
-          const isExpanded = expandedId === c.id;
-
+      <div className="space-y-4">
+        {grouped.map(({ style, items }) => {
+          const sc = STYLE_COLORS[style] ?? DEFAULT_STYLE_COLOR;
+          const isCollapsed = collapsedGroups.has(style);
           return (
-            <div key={c.id} className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-4 flex items-start gap-3">
-                <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: teacher?.color ?? '#7C3AED' }} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="font-semibold text-gray-800">{c.name}</span>
-                    {!c.active && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactif</span>}
-                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{c.style}</span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{c.level}</span>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{c.ageGroup}</span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {c.dayOfWeek} · {c.startTime}–{c.endTime} · {c.room}
-                    {teacher && <> · <span style={{ color: teacher.color }}>{teacher.firstName} {teacher.lastName}</span></>}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
-                    <span>{c.capacity} places max</span>
-                    {c.price > 0 && (
-                      <span className="flex items-center gap-0.5 text-green-600 font-medium">
-                        <Euro size={11} />{c.price}{c.priceLabel}
-                      </span>
-                    )}
-                    {c.attire.length > 0 && (
-                      <span className="flex items-center gap-0.5 text-purple-500">
-                        <Shirt size={11} />{c.attire.length} article(s) tenue
-                      </span>
-                    )}
-                    {exceptions.length > 0 && (
-                      <span className="text-orange-500">{exceptions.length} exception(s)</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => openException(c)} className="p-1.5 text-orange-400 hover:bg-orange-50 rounded-lg" title="Exception ponctuelle">
-                    <AlertTriangle size={15} />
-                  </button>
-                  <button onClick={() => openEdit(c)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
-                    <Pencil size={15} />
-                  </button>
-                  <button onClick={() => deleteCourse(c.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg">
-                    <Trash2 size={15} />
-                  </button>
-                  <button onClick={() => setExpandedId(isExpanded ? null : c.id)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
-                    {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                  </button>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="border-t border-gray-100 p-4 space-y-4">
-                  {c.description && <p className="text-sm text-gray-600">{c.description}</p>}
-
-                  {/* Attire */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                      <Shirt size={14} className="text-purple-500" /> Tenue requise pour les élèves
-                    </h3>
-                    {c.attire.length === 0 ? (
-                      <p className="text-xs text-gray-400">Aucune tenue définie.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {c.attire.map(a => (
-                          <div key={a.id} className="flex items-start gap-3 bg-gray-50 rounded-lg p-3">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${CATEGORY_COLORS[a.category]}`}>
-                              {a.category}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-gray-800">
-                                {a.name}
-                                {!a.mandatory && <span className="ml-1 text-xs text-gray-400">(optionnel)</span>}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-0.5">{a.description}</div>
-                              {(a.color || a.brand) && (
-                                <div className="text-xs text-gray-400 mt-0.5">
-                                  {a.color && <span>Couleur : {a.color}</span>}
-                                  {a.color && a.brand && <span> · </span>}
-                                  {a.brand && <span>Marque : {a.brand}</span>}
-                                </div>
-                              )}
-                              {a.notes && <div className="text-xs text-gray-400 italic mt-0.5">{a.notes}</div>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Exceptions */}
-                  {exceptions.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                        <AlertTriangle size={14} className="text-orange-500" /> Exceptions / Modifications ponctuelles
-                      </h3>
-                      <div className="space-y-1">
-                        {exceptions.map(ex => (
-                          <div key={ex.id} className="text-xs flex items-center gap-2 bg-orange-50 rounded-lg p-2">
-                            <span className="font-medium text-gray-700">{ex.originalDate}</span>
-                            {ex.isCancelled ? (
-                              <span className="text-red-600 font-medium">Annulé</span>
-                            ) : (
-                              <span className="text-blue-600">→ Déplacé au {ex.newDate} {ex.newStartTime && `à ${ex.newStartTime}`}</span>
-                            )}
-                            {ex.reason && <span className="text-gray-400">({ex.reason})</span>}
-                            <button onClick={() => deleteCourseException(ex.id)} className="ml-auto text-red-400 hover:text-red-600">
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+            <div key={style} className={`rounded-xl border ${sc.border} overflow-hidden`}>
+              {/* Group header */}
+              <button
+                onClick={() => toggleGroup(style)}
+                className={`w-full flex items-center gap-3 px-4 py-3 ${sc.bg} hover:brightness-95 transition-all`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: sc.dot }} />
+                <span className={`font-semibold text-sm ${sc.text} flex-1 text-left`}>{style}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.bg} ${sc.text} border ${sc.border}`}>
+                  {items.length} cours
+                </span>
+                {isCollapsed
+                  ? <ChevronRight size={16} className={sc.text} />
+                  : <ChevronDown size={16} className={sc.text} />}
+              </button>
+              {/* Course cards */}
+              {!isCollapsed && (
+                <div className="divide-y divide-gray-100">
+                  {items.map(c => renderCourseCard(c))}
                 </div>
               )}
             </div>
           );
         })}
+
+        {/* Inactive courses */}
+        {inactiveCourses.length > 0 && (
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => toggleGroup('__inactive__')}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all"
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-400 flex-shrink-0" />
+              <span className="font-semibold text-sm text-gray-500 flex-1 text-left">Cours inactifs</span>
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                {inactiveCourses.length} cours
+              </span>
+              {collapsedGroups.has('__inactive__')
+                ? <ChevronRight size={16} className="text-gray-400" />
+                : <ChevronDown size={16} className="text-gray-400" />}
+            </button>
+            {!collapsedGroups.has('__inactive__') && (
+              <div className="divide-y divide-gray-100">
+                {inactiveCourses.map(c => renderCourseCard(c))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Course modal */}
