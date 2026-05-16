@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle, BookOpen, Clock, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle, BookOpen, Clock, RefreshCw, Undo2 } from 'lucide-react';
 import type { Registration, RegistrationStatus, PaymentStatus } from '../types';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -166,6 +166,24 @@ export default function Registrations() {
     updateCourseEnrollment({ ...enrollment, status: 'active', paymentStatus: 'paid' });
   }
 
+  // Reversal helpers so admin can correct an over-eager validation / payment.
+  function revertCourseEnrollmentToPending(id: string) {
+    const enrollment = courseEnrollments.find(e => e.id === id);
+    if (!enrollment) return;
+    updateCourseEnrollment({ ...enrollment, status: 'pending', validatedAt: undefined, rejectedAt: undefined, paymentStatus: 'pending' });
+  }
+  function markCourseEnrollmentUnpaid(id: string) {
+    const enrollment = courseEnrollments.find(e => e.id === id);
+    if (!enrollment) return;
+    updateCourseEnrollment({ ...enrollment, status: 'validated', paymentStatus: 'pending' });
+  }
+  function revertRegistrationToPending(r: Registration) {
+    updateRegistration({ ...r, status: 'pending', paymentStatus: 'pending', paymentDate: undefined });
+  }
+  function markRegistrationUnpaid(r: Registration) {
+    updateRegistration({ ...r, paymentStatus: 'pending', paymentDate: undefined });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -303,11 +321,38 @@ export default function Registrations() {
                                 </>
                               )}
                               {enrollment.status === 'validated' && enrollment.paymentStatus === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => markCourseEnrollmentPaid(enrollment.id)}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                                  >
+                                    <CreditCard size={12} /> Marquer payé
+                                  </button>
+                                  <button
+                                    onClick={() => revertCourseEnrollmentToPending(enrollment.id)}
+                                    className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"
+                                    title="Annuler la validation (retour en attente)"
+                                  >
+                                    <Undo2 size={15} />
+                                  </button>
+                                </>
+                              )}
+                              {enrollment.status === 'active' && (
                                 <button
-                                  onClick={() => markCourseEnrollmentPaid(enrollment.id)}
-                                  className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                                  onClick={() => markCourseEnrollmentUnpaid(enrollment.id)}
+                                  className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"
+                                  title="Marquer non payé (retour en attente de paiement)"
                                 >
-                                  <CreditCard size={12} /> Marquer payé
+                                  <Undo2 size={15} />
+                                </button>
+                              )}
+                              {enrollment.status === 'rejected' && (
+                                <button
+                                  onClick={() => revertCourseEnrollmentToPending(enrollment.id)}
+                                  className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg"
+                                  title="Restaurer la demande"
+                                >
+                                  <Undo2 size={15} />
                                 </button>
                               )}
                             </div>
@@ -435,11 +480,38 @@ export default function Registrations() {
                           </>
                         )}
                         {r.status === 'validated' && r.paymentStatus === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => markPaid(r)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                            >
+                              <CreditCard size={12} /> Marquer payé
+                            </button>
+                            <button
+                              onClick={() => revertRegistrationToPending(r)}
+                              className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"
+                              title="Annuler la validation (retour en attente)"
+                            >
+                              <Undo2 size={15} />
+                            </button>
+                          </>
+                        )}
+                        {r.status === 'validated' && r.paymentStatus === 'paid' && (
                           <button
-                            onClick={() => markPaid(r)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                            onClick={() => markRegistrationUnpaid(r)}
+                            className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"
+                            title="Marquer non payé (retour en attente de paiement)"
                           >
-                            <CreditCard size={12} /> Marquer payé
+                            <Undo2 size={15} />
+                          </button>
+                        )}
+                        {r.status === 'rejected' && (
+                          <button
+                            onClick={() => revertRegistrationToPending(r)}
+                            className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg"
+                            title="Restaurer la demande"
+                          >
+                            <Undo2 size={15} />
                           </button>
                         )}
                         <button onClick={() => deleteRegistration(r.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-lg">
