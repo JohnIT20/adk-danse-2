@@ -2,10 +2,25 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Plus, Pencil, Trash2, X, Mail, Phone, BookOpen, Users,
-  UserCheck, AlertTriangle, ChevronRight, ArrowLeftRight,
+  UserCheck, AlertTriangle, ChevronRight, ChevronDown, ArrowLeftRight,
   ShieldCheck, Search,
 } from 'lucide-react';
 import type { Teacher, DanceStyle, Course } from '../types';
+
+const STYLE_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  'Éveil à la danse': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: '#ec4899' },
+  'Danse classique': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: '#7c3aed' },
+  'Jazz':            { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200',  dot: '#d97706' },
+  'Contemporain':    { bg: 'bg-teal-50',   text: 'text-teal-700',   border: 'border-teal-200',   dot: '#0d9488' },
+  'Hip-hop':         { bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200',   dot: '#2563eb' },
+  'Break':           { bg: 'bg-cyan-50',   text: 'text-cyan-700',   border: 'border-cyan-200',   dot: '#0891b2' },
+  'Ragga':           { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: '#ea580c' },
+  'Girly':           { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-200',   dot: '#e11d48' },
+  'Pomdance':        { bg: 'bg-fuchsia-50',text: 'text-fuchsia-700',border: 'border-fuchsia-200',dot: '#a21caf' },
+  'Line Dance':      { bg: 'bg-lime-50',   text: 'text-lime-700',   border: 'border-lime-200',   dot: '#65a30d' },
+  'Pole Dance':      { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: '#4338ca' },
+};
+const DEFAULT_STYLE_COLOR = { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', dot: '#6b7280' };
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -741,6 +756,7 @@ export default function Teachers() {
   const [managingTeacher, setManagingTeacher] = useState<Teacher | null>(null);
   const [editingTeacher, setEditingTeacher]   = useState<Teacher | null | 'new'>('new' as const);
   const [showEdit, setShowEdit]               = useState(false);
+  const [openGroup, setOpenGroup]             = useState<string | null>(null);
 
   function openNew() { setEditingTeacher(null); setShowEdit(true); }
 
@@ -780,6 +796,33 @@ export default function Teachers() {
   const coveredCourses = courses.filter(c => c.active && c.substituteTeacherId).length;
   const uncoveredCourses = totalCourses - coveredCourses;
 
+  // Group teachers by specialty (a teacher appears in every specialty tile they have).
+  // Teachers with no specialty fall into a dedicated "Sans spécialité" tile.
+  const STYLE_ORDER: string[] = STYLES;
+  const presentStyles: string[] = Array.from(new Set(teachers.flatMap(t => t.specialties)));
+  const sortedStyles = presentStyles.sort((a, b) => {
+    const ia = STYLE_ORDER.indexOf(a);
+    const ib = STYLE_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  const teachersWithoutSpecialty = teachers.filter(t => t.specialties.length === 0);
+  const groupedTeachers: { style: string; items: Teacher[]; isOrphan?: boolean }[] = [
+    ...sortedStyles.map(style => ({
+      style,
+      items: teachers.filter(t => t.specialties.includes(style as DanceStyle)),
+    })),
+    ...(teachersWithoutSpecialty.length > 0
+      ? [{ style: '__orphan__', items: teachersWithoutSpecialty, isOrphan: true }]
+      : []),
+  ];
+
+  function toggleGroup(key: string) {
+    setOpenGroup(prev => (prev === key ? null : key));
+  }
+
   return (
     <div className="space-y-5">
       {/* Header bar */}
@@ -810,24 +853,63 @@ export default function Teachers() {
         </button>
       </div>
 
-      {/* Teacher grid */}
+      {/* Teacher tiles grouped by specialty */}
       {teachers.length === 0 ? (
         <div className="bg-white rounded-xl p-10 text-center text-gray-400 shadow-sm border border-gray-100">
           <Users size={32} className="mx-auto mb-2 opacity-30" />
           <p className="text-sm">Aucun professeur enregistré.</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {teachers.map(t => (
-            <TeacherCard
-              key={t.id}
-              teacher={t}
-              courses={courses}
-              onManage={() => setManagingTeacher(t)}
-              onEdit={() => openEdit(t)}
-              onDelete={() => handleDelete(t)}
-            />
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {groupedTeachers.map(({ style, items, isOrphan }) => {
+            const sc = isOrphan
+              ? { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: '#9ca3af' }
+              : STYLE_COLORS[style] ?? DEFAULT_STYLE_COLOR;
+            const isOpen = openGroup === style;
+            const label = isOrphan ? 'Sans spécialité' : style;
+            return (
+              <div
+                key={style}
+                className={`${isOpen ? 'sm:col-span-2 lg:col-span-3' : ''} rounded-2xl border ${sc.border} ${sc.bg} overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
+              >
+                <button
+                  onClick={() => toggleGroup(style)}
+                  className="w-full p-5 flex items-center gap-4 text-left hover:brightness-95 transition-all"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                    style={{ backgroundColor: sc.dot }}
+                  >
+                    <Users size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`font-bold text-base ${sc.text} truncate`}>{label}</h3>
+                    <p className={`text-xs ${sc.text} opacity-70 mt-0.5`}>
+                      {items.length} professeur{items.length > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    size={20}
+                    className={`${sc.text} shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {isOpen && (
+                  <div className="bg-white border-t border-gray-100 p-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {items.map(t => (
+                      <TeacherCard
+                        key={t.id}
+                        teacher={t}
+                        courses={courses}
+                        onManage={() => setManagingTeacher(t)}
+                        onEdit={() => openEdit(t)}
+                        onDelete={() => handleDelete(t)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
