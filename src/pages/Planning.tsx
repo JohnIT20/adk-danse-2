@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { layoutTimeSlots } from '../utils/layout';
 
 const DAYS: string[] = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 8); // 8:00 to 21:00
@@ -136,6 +137,27 @@ export default function Planning() {
                 s.date === dateStr && s.status !== 'cancelled'
               );
 
+              // Lay out all events of the day in shared overlap tracks so that
+              // simultaneous events split the column width instead of stacking.
+              type DayEvent =
+                | { kind: 'course'; data: typeof effectiveCourses[number]; startTime: string; endTime: string }
+                | { kind: 'rescheduled'; data: typeof rescheduled[number]; startTime: string; endTime: string }
+                | { kind: 'pro'; data: typeof dayProSessions[number]; startTime: string; endTime: string };
+              const allDayEvents: DayEvent[] = [
+                ...effectiveCourses.map(c => ({ kind: 'course' as const, data: c, startTime: c.startTime, endTime: c.endTime })),
+                ...rescheduled.map(ex => {
+                  const c = courses.find(x => x.id === ex.courseId);
+                  return { kind: 'rescheduled' as const, data: ex, startTime: ex.newStartTime ?? c?.startTime ?? '00:00', endTime: ex.newEndTime ?? c?.endTime ?? '00:00' };
+                }),
+                ...dayProSessions.map(s => ({ kind: 'pro' as const, data: s, startTime: s.startTime, endTime: s.endTime })),
+              ];
+              const positioned = layoutTimeSlots(allDayEvents);
+              function trackStyle(column: number, columns: number) {
+                const gap = 0.25; // % gap between tracks
+                const width = (100 - gap * (columns - 1)) / columns;
+                return { left: `${column * (width + gap)}%`, width: `${width}%` };
+              }
+
               return (
                 <div
                   key={di}
@@ -150,56 +172,52 @@ export default function Planning() {
                     />
                   ))}
 
-                  {/* Regular courses */}
-                  {effectiveCourses.map(c => {
-                    const teacher = teachers.find(t => t.id === c.teacherId);
-                    const style = getPositionStyle(c.startTime, c.endTime);
-                    return (
-                      <div
-                        key={c.id}
-                        className="absolute left-1 right-1 rounded-md p-1.5 text-white overflow-hidden cursor-pointer hover:opacity-90 transition-opacity z-10"
-                        style={{ ...style, backgroundColor: teacher?.color ?? '#7C3AED' }}
-                        title={`${c.name} · ${c.startTime}-${c.endTime} · ${teacher?.firstName}`}
-                      >
-                        <div className="text-xs font-semibold leading-tight truncate">{c.name}</div>
-                        <div className="text-xs opacity-80 leading-tight">{c.startTime}–{c.endTime}</div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Rescheduled courses */}
-                  {rescheduled.map(ex => {
-                    const c = courses.find(x => x.id === ex.courseId);
-                    if (!c) return null;
-                    const teacher = teachers.find(t => t.id === c.teacherId);
-                    const st = ex.newStartTime ?? c.startTime;
-                    const et = ex.newEndTime ?? c.endTime;
-                    const style = getPositionStyle(st, et);
-                    return (
-                      <div
-                        key={ex.id}
-                        className="absolute left-1 right-1 rounded-md p-1.5 text-white overflow-hidden cursor-pointer hover:opacity-90 z-10 opacity-80 border-2 border-white/50"
-                        style={{ ...style, backgroundColor: teacher?.color ?? '#7C3AED' }}
-                        title={`[Déplacé] ${c.name}`}
-                      >
-                        <div className="text-xs font-semibold leading-tight truncate">↩ {c.name}</div>
-                        <div className="text-xs opacity-80">{st}–{et}</div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Pro sessions */}
-                  {dayProSessions.map(s => {
-                    const style = getPositionStyle(s.startTime, s.endTime);
+                  {positioned.map(({ item, column, columns }) => {
+                    const pos = getPositionStyle(item.startTime, item.endTime);
+                    const track = trackStyle(column, columns);
+                    if (item.kind === 'course') {
+                      const c = item.data;
+                      const teacher = teachers.find(t => t.id === c.teacherId);
+                      return (
+                        <div
+                          key={c.id}
+                          className="absolute rounded-md p-1.5 text-white overflow-hidden cursor-pointer hover:opacity-90 transition-opacity z-10"
+                          style={{ ...pos, ...track, backgroundColor: teacher?.color ?? '#7C3AED' }}
+                          title={`${c.name} · ${c.startTime}-${c.endTime} · ${teacher?.firstName ?? ''} · ${c.room}`}
+                        >
+                          <div className="text-xs font-semibold leading-tight truncate">{c.name}</div>
+                          <div className="text-xs opacity-80 leading-tight truncate">{c.startTime}–{c.endTime}</div>
+                          {columns > 1 && <div className="text-[10px] opacity-70 truncate">{c.room}</div>}
+                        </div>
+                      );
+                    }
+                    if (item.kind === 'rescheduled') {
+                      const ex = item.data;
+                      const c = courses.find(x => x.id === ex.courseId);
+                      if (!c) return null;
+                      const teacher = teachers.find(t => t.id === c.teacherId);
+                      return (
+                        <div
+                          key={ex.id}
+                          className="absolute rounded-md p-1.5 text-white overflow-hidden cursor-pointer hover:opacity-90 z-10 opacity-80 border-2 border-white/50"
+                          style={{ ...pos, ...track, backgroundColor: teacher?.color ?? '#7C3AED' }}
+                          title={`[Déplacé] ${c.name}`}
+                        >
+                          <div className="text-xs font-semibold leading-tight truncate">↩ {c.name}</div>
+                          <div className="text-xs opacity-80 truncate">{item.startTime}–{item.endTime}</div>
+                        </div>
+                      );
+                    }
+                    const s = item.data;
                     return (
                       <div
                         key={s.id}
-                        className="absolute left-1 right-1 rounded-md p-1.5 overflow-hidden cursor-pointer hover:opacity-90 z-10 border border-amber-400"
-                        style={{ ...style, backgroundColor: '#FEF3C7', color: '#92400E' }}
+                        className="absolute rounded-md p-1.5 overflow-hidden cursor-pointer hover:opacity-90 z-10 border border-amber-400"
+                        style={{ ...pos, ...track, backgroundColor: '#FEF3C7', color: '#92400E' }}
                         title={`${s.title} · ${s.startTime}-${s.endTime}`}
                       >
                         <div className="text-xs font-semibold leading-tight truncate">⭐ {s.title}</div>
-                        <div className="text-xs opacity-80">{s.startTime}–{s.endTime}</div>
+                        <div className="text-xs opacity-80 truncate">{s.startTime}–{s.endTime}</div>
                       </div>
                     );
                   })}

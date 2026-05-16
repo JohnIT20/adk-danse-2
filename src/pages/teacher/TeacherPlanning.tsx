@@ -9,6 +9,7 @@ import {
   MapPin, Tag, Euro, BookOpen, ArrowRight,
 } from 'lucide-react';
 import type { Course, DanceStyle, RepresentationSession } from '../../types';
+import { layoutTimeSlots } from '../../utils/layout';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 08:00–22:00
@@ -153,6 +154,26 @@ export default function TeacherPlanning() {
                 const rescheduled = courseExceptions.filter(e => e.newDate === dateStr && !e.isCancelled);
                 const dayReps = myReps.filter(r => r.date === dateStr);
 
+                // Merge all events and lay them out side-by-side when they overlap
+                type DayEvent =
+                  | { kind: 'course'; data: typeof dayCourses[number]; startTime: string; endTime: string }
+                  | { kind: 'rescheduled'; data: typeof rescheduled[number]; startTime: string; endTime: string }
+                  | { kind: 'rep'; data: typeof dayReps[number]; startTime: string; endTime: string };
+                const allEvents: DayEvent[] = [
+                  ...dayCourses.map(c => ({ kind: 'course' as const, data: c, startTime: c.startTime, endTime: c.endTime })),
+                  ...rescheduled.map(ex => {
+                    const c = myCourses.find(x => x.id === ex.courseId);
+                    return { kind: 'rescheduled' as const, data: ex, startTime: ex.newStartTime ?? c?.startTime ?? '00:00', endTime: ex.newEndTime ?? c?.endTime ?? '00:00' };
+                  }),
+                  ...dayReps.map(r => ({ kind: 'rep' as const, data: r, startTime: r.startTime, endTime: r.endTime })),
+                ];
+                const positioned = layoutTimeSlots(allEvents);
+                const trackStyle = (column: number, columns: number) => {
+                  const gap = 0.25;
+                  const width = (100 - gap * (columns - 1)) / columns;
+                  return { left: `${column * (width + gap)}%`, width: `${width}%` };
+                };
+
                 return (
                   <div
                     key={di}
@@ -167,69 +188,70 @@ export default function TeacherPlanning() {
                       />
                     ))}
 
-                    {/* Regular courses */}
-                    {dayCourses.map(c => {
-                      const ps = posStyle(c.startTime, c.endTime);
-                      const color = STYLE_COLORS[c.style] ?? '#6366F1';
-                      const enroll = courseEnrollments.filter(e => e.courseId === c.id && e.status === 'active').length;
-                      const isActive = sel?.kind === 'course' && sel.course.id === c.id;
-                      return (
-                        <div
-                          key={c.id}
-                          className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 text-white cursor-pointer z-10 shadow-sm transition-all"
-                          style={{
-                            ...ps,
-                            backgroundColor: color,
-                            outline: isActive ? '2px solid white' : 'none',
-                            filter: isActive ? 'brightness(1.15)' : undefined,
-                          }}
-                          onClick={e => { e.stopPropagation(); setSel({ kind: 'course', course: c }); }}
-                        >
-                          <div className="text-[11px] font-semibold leading-tight truncate">{c.name}</div>
-                          <div className="text-[10px] opacity-80">{c.startTime}–{c.endTime}</div>
-                          {enroll > 0 && <div className="text-[10px] opacity-75">{enroll} élève{enroll > 1 ? 's' : ''}</div>}
-                        </div>
-                      );
-                    })}
-
-                    {/* Rescheduled */}
-                    {rescheduled.map(ex => {
-                      const c = myCourses.find(x => x.id === ex.courseId);
-                      if (!c) return null;
-                      const st = ex.newStartTime ?? c.startTime;
-                      const et = ex.newEndTime ?? c.endTime;
-                      const color = STYLE_COLORS[c.style] ?? '#6366F1';
-                      return (
-                        <div
-                          key={ex.id}
-                          className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 text-white z-10 opacity-75 ring-2 ring-white/60 cursor-pointer"
-                          style={{ ...posStyle(st, et), backgroundColor: color }}
-                          onClick={e => { e.stopPropagation(); setSel({ kind: 'course', course: c }); }}
-                        >
-                          <div className="text-[11px] font-semibold leading-tight truncate">↩ {c.name}</div>
-                          <div className="text-[10px] opacity-80">{st}–{et}</div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Representations */}
-                    {dayReps.map(r => {
+                    {positioned.map(({ item, column, columns }) => {
+                      const ps = posStyle(item.startTime, item.endTime);
+                      const track = trackStyle(column, columns);
+                      if (item.kind === 'course') {
+                        const c = item.data;
+                        const color = STYLE_COLORS[c.style] ?? '#6366F1';
+                        const enroll = courseEnrollments.filter(e => e.courseId === c.id && e.status === 'active').length;
+                        const isActive = sel?.kind === 'course' && sel.course.id === c.id;
+                        const room = rooms.find(x => x.id === c.room);
+                        return (
+                          <div
+                            key={c.id}
+                            className="absolute rounded-md px-1.5 py-1 text-white cursor-pointer z-10 shadow-sm transition-all overflow-hidden"
+                            style={{
+                              ...ps, ...track,
+                              backgroundColor: color,
+                              outline: isActive ? '2px solid white' : 'none',
+                              filter: isActive ? 'brightness(1.15)' : undefined,
+                            }}
+                            onClick={e => { e.stopPropagation(); setSel({ kind: 'course', course: c }); }}
+                            title={`${c.name} · ${c.startTime}–${c.endTime} · ${room?.name ?? c.room}`}
+                          >
+                            <div className="text-[11px] font-semibold leading-tight truncate">{c.name}</div>
+                            <div className="text-[10px] opacity-80 truncate">{c.startTime}–{c.endTime}</div>
+                            {columns > 1 && room && <div className="text-[10px] opacity-75 truncate">{room.name}</div>}
+                            {columns === 1 && enroll > 0 && <div className="text-[10px] opacity-75">{enroll} élève{enroll > 1 ? 's' : ''}</div>}
+                          </div>
+                        );
+                      }
+                      if (item.kind === 'rescheduled') {
+                        const ex = item.data;
+                        const c = myCourses.find(x => x.id === ex.courseId);
+                        if (!c) return null;
+                        const color = STYLE_COLORS[c.style] ?? '#6366F1';
+                        return (
+                          <div
+                            key={ex.id}
+                            className="absolute rounded-md px-1.5 py-1 text-white z-10 opacity-75 ring-2 ring-white/60 cursor-pointer overflow-hidden"
+                            style={{ ...ps, ...track, backgroundColor: color }}
+                            onClick={e => { e.stopPropagation(); setSel({ kind: 'course', course: c }); }}
+                          >
+                            <div className="text-[11px] font-semibold leading-tight truncate">↩ {c.name}</div>
+                            <div className="text-[10px] opacity-80 truncate">{item.startTime}–{item.endTime}</div>
+                          </div>
+                        );
+                      }
+                      const r = item.data;
                       const room = rooms.find(x => x.id === r.room);
                       const isActive = sel?.kind === 'rep' && sel.rep.id === r.id;
                       return (
                         <div
                           key={r.id}
-                          className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-1 z-10 shadow-sm cursor-pointer border border-amber-400 transition-all"
+                          className="absolute rounded-md px-1.5 py-1 z-10 shadow-sm cursor-pointer border border-amber-400 transition-all overflow-hidden"
                           style={{
-                            ...posStyle(r.startTime, r.endTime),
+                            ...ps, ...track,
                             backgroundColor: '#FEF3C7',
                             color: '#92400E',
                             outline: isActive ? '2px solid #F59E0B' : 'none',
                           }}
                           onClick={e => { e.stopPropagation(); setSel({ kind: 'rep', rep: r }); }}
+                          title={`${r.title} · ${r.startTime}–${r.endTime}`}
                         >
                           <div className="text-[11px] font-semibold leading-tight truncate">🎭 {r.title}</div>
-                          <div className="text-[10px] opacity-80">{r.startTime}–{r.endTime}</div>
+                          <div className="text-[10px] opacity-80 truncate">{r.startTime}–{r.endTime}</div>
                           {room && <div className="text-[10px] opacity-70 truncate">{room.venue}</div>}
                         </div>
                       );

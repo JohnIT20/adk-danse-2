@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, ArrowLeft, Star, Shirt, Calendar,
   CheckCircle, Euro, Plus, X, AlertCircle, CreditCard, Clock,
 } from 'lucide-react';
+import { layoutTimeSlots } from '../../utils/layout';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -248,6 +249,19 @@ export default function ChildView() {
                     // Pro sessions on this date
                     const dayProSessions = myProSessions.filter(s => s.date === dateStr);
 
+                    type DayEvent =
+                      | { kind: 'course'; data: typeof dayCourses[number]; startTime: string; endTime: string }
+                      | { kind: 'pro'; data: typeof dayProSessions[number]; startTime: string; endTime: string };
+                    const positioned = layoutTimeSlots<DayEvent>([
+                      ...dayCourses.map(c => ({ kind: 'course' as const, data: c, startTime: c.startTime, endTime: c.endTime })),
+                      ...dayProSessions.map(s => ({ kind: 'pro' as const, data: s, startTime: s.startTime, endTime: s.endTime })),
+                    ]);
+                    const trackStyle = (column: number, columns: number) => {
+                      const gap = 0.25;
+                      const width = (100 - gap * (columns - 1)) / columns;
+                      return { left: `${column * (width + gap)}%`, width: `${width}%` };
+                    };
+
                     return (
                       <div key={di} className={`relative border-l border-gray-100 ${isToday ? 'bg-purple-50/20' : ''}`}
                         style={{ height: '840px' }}>
@@ -257,29 +271,30 @@ export default function ChildView() {
                             style={{ top: `${((h - MIN_HOUR) / 14) * 100}%` }} />
                         ))}
 
-                        {/* Enrolled courses */}
-                        {dayCourses.map(c => {
-                          const teacher = teachers.find(t => t.id === c.teacherId);
-                          const ps = posStyle(c.startTime, c.endTime);
-                          return (
-                            <div key={c.id} className="absolute left-0.5 right-0.5 rounded-lg p-1.5 text-white overflow-hidden z-10"
-                              style={{ ...ps, backgroundColor: teacher?.color ?? '#7C3AED' }}>
-                              <div className="text-xs font-semibold leading-tight truncate">{c.name}</div>
-                              <div className="text-xs opacity-80">{c.startTime}–{c.endTime}</div>
-                            </div>
-                          );
-                        })}
-
-                        {/* Pro sessions */}
-                        {dayProSessions.map(s => {
+                        {positioned.map(({ item, column, columns }) => {
+                          const ps = posStyle(item.startTime, item.endTime);
+                          const track = trackStyle(column, columns);
+                          if (item.kind === 'course') {
+                            const c = item.data;
+                            const teacher = teachers.find(t => t.id === c.teacherId);
+                            return (
+                              <div key={c.id} className="absolute rounded-lg p-1.5 text-white overflow-hidden z-10"
+                                style={{ ...ps, ...track, backgroundColor: teacher?.color ?? '#7C3AED' }}
+                                title={`${c.name} · ${c.startTime}–${c.endTime}`}>
+                                <div className="text-xs font-semibold leading-tight truncate">{c.name}</div>
+                                <div className="text-xs opacity-80 truncate">{c.startTime}–{c.endTime}</div>
+                              </div>
+                            );
+                          }
+                          const s = item.data;
                           const reg = myProRegs.find(r => r.sessionId === s.id);
-                          const ps = posStyle(s.startTime, s.endTime);
                           return (
-                            <div key={s.id} className="absolute left-0.5 right-0.5 rounded-lg p-1.5 overflow-hidden z-10 border border-amber-300"
-                              style={{ ...ps, backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                            <div key={s.id} className="absolute rounded-lg p-1.5 overflow-hidden z-10 border border-amber-300"
+                              style={{ ...ps, ...track, backgroundColor: '#FEF3C7', color: '#92400E' }}
+                              title={`${s.title} · ${s.startTime}–${s.endTime}`}>
                               <div className="text-xs font-semibold leading-tight truncate">⭐ {s.title}</div>
-                              <div className="text-xs opacity-80">{s.startTime}–{s.endTime}</div>
-                              {reg && <div className="text-xs mt-0.5 opacity-70">{STATUS_LABELS[reg.status]}</div>}
+                              <div className="text-xs opacity-80 truncate">{s.startTime}–{s.endTime}</div>
+                              {reg && columns === 1 && <div className="text-xs mt-0.5 opacity-70 truncate">{STATUS_LABELS[reg.status]}</div>}
                             </div>
                           );
                         })}
