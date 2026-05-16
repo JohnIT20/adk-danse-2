@@ -5,7 +5,7 @@ import { findScheduleConflict } from '../../utils/conflicts';
 import type { Course, DanceStyle, Level, AgeGroup, DayOfWeek, AttireItem, AttireCategory, ScheduleChangeRequest } from '../../types';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { Pencil, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Plus, AlertCircle, CheckCircle } from 'lucide-react';
+import { Pencil, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Plus, AlertCircle, CheckCircle, BookOpenCheck } from 'lucide-react';
 
 const STYLES: DanceStyle[] = ['Éveil à la danse', 'Danse classique', 'Jazz', 'Contemporain', 'Hip-hop', 'Break', 'Ragga', 'Girly', 'Pomdance', 'Line Dance', 'Pole Dance'];
 const LEVELS: Level[] = ['Éveil', 'Débutant', 'Intermédiaire', 'Avancé', 'Tous niveaux'];
@@ -24,13 +24,14 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 
 export default function TeacherCourses() {
   const { currentUser } = useAuth();
-  const { courses, courseEnrollments, students, rooms, representations, addChangeRequest, updateCourse, courseExceptions, addCourseException, deleteCourseException } = useApp();
+  const { courses, courseEnrollments, students, rooms, representations, addChangeRequest, addCourse, updateCourse, courseExceptions, addCourseException, deleteCourseException } = useApp();
 
   const tid = currentUser?.teacherId ?? '';
   const myCourses = courses.filter(c => c.teacherId === tid);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<Partial<Course>>({});
   const [conflict, setConflict] = useState<{ name: string; teacherId: string; courseId: string } | null>(null);
   const [requestNote, setRequestNote] = useState('');
@@ -48,25 +49,58 @@ export default function TeacherCourses() {
 
   function openEdit(c: Course) {
     setEditingCourse(c);
+    setCreating(false);
     setForm({ ...c });
     setConflict(null);
     setSaved(false);
     setShowAttireForm(false);
   }
 
-  function trySubmit() {
-    if (!editingCourse || !form.dayOfWeek || !form.startTime || !form.endTime || !form.room) return;
+  function openNew() {
+    setEditingCourse(null);
+    setCreating(true);
+    setForm({
+      name: '',
+      style: 'Jazz',
+      level: 'Débutant',
+      ageGroup: '6-8 ans',
+      teacherId: tid,
+      room: rooms[0]?.id ?? '',
+      dayOfWeek: 'Lundi',
+      startTime: '18:00',
+      endTime: '19:00',
+      capacity: 15,
+      price: 60,
+      priceLabel: '/ mois',
+      attire: [],
+      description: '',
+      active: true,
+    });
+    setConflict(null);
+    setSaved(false);
+    setShowAttireForm(false);
+  }
 
-    // Check for schedule conflicts
+  function closeModal() {
+    setEditingCourse(null);
+    setCreating(false);
+    setSaved(false);
+    setConflict(null);
+  }
+
+  function trySubmit() {
+    if (!form.name?.trim() || !form.dayOfWeek || !form.startTime || !form.endTime || !form.room) return;
+    if (!creating && !editingCourse) return;
+
+    // Check for schedule conflicts (exclude current course id when editing)
     const hit = findScheduleConflict(
       form.room!, form.dayOfWeek!, form.startTime!, form.endTime!,
-      courses, representations, editingCourse.id
+      courses, representations, editingCourse?.id
     );
 
     if (hit) {
       const hitTeacher = { teacherId: hit.teacherId, courseId: hit.id, name: hit.name };
       if (hit.teacherId === tid) {
-        // Own conflict – just block
         setConflict({ ...hitTeacher, teacherId: '' });
       } else {
         setConflict(hitTeacher);
@@ -74,12 +108,19 @@ export default function TeacherCourses() {
       return;
     }
 
-    // No conflict → apply
-    updateCourse({ ...editingCourse, ...form } as Course);
-    setSaved(true);
-    toast.success('Modifications enregistrées !');
+    if (creating) {
+      // Force teacherId to be self (mirrors the RLS WITH CHECK).
+      addCourse({ ...(form as Course), id: genId(), teacherId: tid });
+      toast.success('Cours créé !');
+      setSaved(true);
+      setTimeout(closeModal, 800);
+    } else if (editingCourse) {
+      updateCourse({ ...editingCourse, ...form, teacherId: tid } as Course);
+      toast.success('Modifications enregistrées !');
+      setSaved(true);
+      setTimeout(closeModal, 800);
+    }
     setConflict(null);
-    setTimeout(() => { setEditingCourse(null); setSaved(false); }, 800);
   }
 
   function sendChangeRequest() {
@@ -129,7 +170,15 @@ export default function TeacherCourses() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">{myCourses.length} cours qui me sont assignés</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-gray-500">{myCourses.length} cours qui me sont assignés</p>
+        <button
+          onClick={openNew}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
+        >
+          <Plus size={16} /> Nouveau cours
+        </button>
+      </div>
 
       <div className="space-y-3">
         {myCourses.map(c => {
@@ -223,18 +272,22 @@ export default function TeacherCourses() {
         })}
       </div>
 
-      {/* ===== EDIT MODAL ===== */}
-      {editingCourse && (
+      {/* ===== EDIT / CREATE MODAL ===== */}
+      {(editingCourse || creating) && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-bold text-gray-800">Modifier — {editingCourse.name}</h2>
-              <button onClick={() => setEditingCourse(null)}><X size={20} className="text-gray-400" /></button>
+              <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                {creating
+                  ? <><BookOpenCheck size={18} className="text-indigo-500" /> Nouveau cours</>
+                  : <>Modifier — {editingCourse?.name}</>}
+              </h2>
+              <button onClick={closeModal}><X size={20} className="text-gray-400" /></button>
             </div>
 
             {saved && (
               <div className="mx-5 mt-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2 text-green-700 text-sm">
-                <CheckCircle size={16} /> Modifications enregistrées !
+                <CheckCircle size={16} /> {creating ? 'Cours créé !' : 'Modifications enregistrées !'}
               </div>
             )}
 
@@ -414,9 +467,9 @@ export default function TeacherCourses() {
             </div>
 
             <div className="p-5 border-t border-gray-100 flex gap-3 justify-end">
-              <button onClick={() => setEditingCourse(null)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm">Annuler</button>
+              <button onClick={closeModal} className="px-4 py-2 border border-gray-200 rounded-lg text-sm">Annuler</button>
               <button onClick={trySubmit} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
-                Enregistrer les modifications
+                {creating ? 'Créer le cours' : 'Enregistrer les modifications'}
               </button>
             </div>
           </div>
