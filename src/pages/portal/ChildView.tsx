@@ -29,7 +29,7 @@ export default function ChildView() {
   const { currentUser } = useAuth();
   const {
     students, courses, courseEnrollments, registrations, proSessions, teachers,
-    addCourseEnrollment, updateCourseEnrollment, deleteCourseEnrollment, addRegistration,
+    addCourseEnrollment, deleteCourseEnrollment, addRegistration,
   } = useApp();
   const navigate = useNavigate();
 
@@ -126,12 +126,6 @@ export default function ChildView() {
   function unenroll(courseId: string) {
     const enrollment = myEnrollments.find(e => e.courseId === courseId);
     if (enrollment) deleteCourseEnrollment(enrollment.id);
-  }
-
-  function markCoursePaid(enrollmentId: string) {
-    const enrollment = courseEnrollments.find(e => e.id === enrollmentId);
-    if (!enrollment) return;
-    updateCourseEnrollment({ ...enrollment, status: 'active', paymentStatus: 'paid' });
   }
 
   function registerForProSession(sessionId: string) {
@@ -366,17 +360,11 @@ export default function ChildView() {
                       )}
                     </div>
                     {isValidated && enrollment.paymentStatus === 'pending' && (
-                      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-                        <div className="text-sm text-green-800 flex items-center gap-2">
-                          <CreditCard size={15} className="text-green-600 flex-shrink-0" />
-                          <span>Inscription validée — paiement requis pour confirmer la place.</span>
-                        </div>
-                        <button
-                          onClick={() => markCoursePaid(enrollment.id)}
-                          className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 whitespace-nowrap font-medium"
-                        >
-                          Confirmer le paiement
-                        </button>
+                      <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-orange-800">
+                        <CreditCard size={15} className="text-orange-600 flex-shrink-0" />
+                        <span>
+                          Inscription validée — <strong>paiement en attente</strong>. Contactez l'école pour régler ; votre place sera confirmée dès réception du paiement.
+                        </span>
                       </div>
                     )}
                   </div>
