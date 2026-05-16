@@ -142,15 +142,15 @@ export const useApp = create<AppContextType>()(
         if (email) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('id, student_ids')
+            .select('id, studentIds')
             .ilike('email', email)
             .maybeSingle();
           if (profile) {
-            const currentIds: string[] = profile.student_ids ?? [];
+            const currentIds: string[] = profile.studentIds ?? [];
             if (!currentIds.includes(s.id)) {
               await supabase
                 .from('profiles')
-                .update({ student_ids: [...currentIds, s.id] })
+                .update({ studentIds: [...currentIds, s.id] })
                 .eq('id', profile.id);
             }
           }

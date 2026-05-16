@@ -74,13 +74,13 @@ export default function Students() {
         // Patch any parent profile that referenced a duplicate id.
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, student_ids')
-          .overlaps('student_ids', dupIds);
+          .select('id, studentIds')
+          .overlaps('studentIds', dupIds);
         for (const p of profiles ?? []) {
           const updated = Array.from(new Set(
-            (p.student_ids as string[]).map(id => (dupIds.includes(id) ? canonical.id : id))
+            (p.studentIds as string[]).map(id => (dupIds.includes(id) ? canonical.id : id))
           ));
-          await supabase.from('profiles').update({ student_ids: updated }).eq('id', p.id);
+          await supabase.from('profiles').update({ studentIds: updated }).eq('id', p.id);
         }
 
         // Finally delete the duplicate student records.

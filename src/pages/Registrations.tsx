@@ -101,15 +101,15 @@ export default function Registrations() {
       // (covers cases where the student was created before the parent signed up).
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, student_ids')
+        .select('id, studentIds')
         .ilike('email', pe)
         .maybeSingle();
       if (profile) {
-        const currentIds: string[] = profile.student_ids ?? [];
+        const currentIds: string[] = profile.studentIds ?? [];
         if (!currentIds.includes(studentId)) {
           await supabase
             .from('profiles')
-            .update({ student_ids: [...currentIds, studentId] })
+            .update({ studentIds: [...currentIds, studentId] })
             .eq('id', profile.id);
         }
       }

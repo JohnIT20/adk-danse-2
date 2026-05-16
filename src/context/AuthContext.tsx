@@ -33,20 +33,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile.role = 'admin';
       }
       // Catch-up linking: pull any orphan students whose parentEmail matches
-      // this account but that aren't yet listed in student_ids.
+      // this account but that aren't yet listed in studentIds.
       if (profile.role === 'parent') {
         const { data: orphans } = await supabase
           .from('students')
           .select('id')
           .ilike('parentEmail', user.email);
-        const currentIds: string[] = profile.student_ids ?? [];
+        const currentIds: string[] = profile.studentIds ?? [];
         const missing = (orphans ?? [])
           .map((o: { id: string }) => o.id)
           .filter((id: string) => !currentIds.includes(id));
         if (missing.length > 0) {
           const merged = [...currentIds, ...missing];
-          await supabase.from('profiles').update({ student_ids: merged }).eq('id', user.id);
-          profile.student_ids = merged;
+          await supabase.from('profiles').update({ studentIds: merged }).eq('id', user.id);
+          profile.studentIds = merged;
         }
       }
       setCurrentUser({ ...profile, password: '' } as UserAccount);
@@ -98,14 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const linkStudentToParent = useCallback(async (studentId: string) => {
     if (!currentUser) return;
     const updatedIds = [...currentUser.studentIds, studentId];
-    await supabase.from('profiles').update({ student_ids: updatedIds }).eq('id', currentUser.id);
+    await supabase.from('profiles').update({ studentIds: updatedIds }).eq('id', currentUser.id);
     setCurrentUser(prev => prev ? { ...prev, studentIds: updatedIds } : prev);
   }, [currentUser]);
 
   const unlinkStudentFromParent = useCallback(async (studentId: string) => {
     if (!currentUser) return;
     const updatedIds = currentUser.studentIds.filter(id => id !== studentId);
-    await supabase.from('profiles').update({ student_ids: updatedIds }).eq('id', currentUser.id);
+    await supabase.from('profiles').update({ studentIds: updatedIds }).eq('id', currentUser.id);
     setCurrentUser(prev => prev ? { ...prev, studentIds: updatedIds } : prev);
   }, [currentUser]);
 
