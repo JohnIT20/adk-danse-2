@@ -53,13 +53,34 @@ export default function ParentPortal() {
   }
 
   async function handleAddChild() {
-    if (!childForm.firstName.trim() || !childForm.lastName.trim()) return;
+    if (saving) return;
+    const firstName = childForm.firstName.trim();
+    const lastName = childForm.lastName.trim();
+    if (!firstName || !lastName) return;
     setSaving(true);
+
+    // Guard against duplicates: if a child with the same first+last name
+    // is already linked to this parent, just reopen the existing record.
+    const existing = students.find(s =>
+      s.firstName.trim().toLowerCase() === firstName.toLowerCase() &&
+      s.lastName.trim().toLowerCase() === lastName.toLowerCase() &&
+      (s.parentEmail || '').trim().toLowerCase() === currentUser!.email.toLowerCase()
+    );
+    if (existing) {
+      if (!currentUser!.studentIds.includes(existing.id)) {
+        await linkStudentToParent(existing.id);
+      }
+      setChildForm({ firstName: '', lastName: '', birthDate: '' });
+      setShowAddChild(false);
+      setSaving(false);
+      return;
+    }
+
     const newId = generateId();
     await addStudent({
       id: newId,
-      firstName: childForm.firstName.trim(),
-      lastName: childForm.lastName.trim(),
+      firstName,
+      lastName,
       birthDate: childForm.birthDate,
       parentEmail: currentUser!.email,
       parentPhone: '',

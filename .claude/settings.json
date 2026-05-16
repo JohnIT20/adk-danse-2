@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m 'feat: grouper les profs en tuiles par specialite *)",
+      "Bash(git commit -m 'fix: deduper les eleves et empecher la creation de doublons *)"
+    ]
+  }
+}

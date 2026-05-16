@@ -48,21 +48,27 @@ export default function Registrations() {
   });
 
   function addReg() {
-    // Create or find student
+    // Find an existing student matching firstName + lastName + parentEmail
+    // (case-insensitive, trimmed) to avoid creating duplicates.
+    const fn = regForm.firstName.trim().toLowerCase();
+    const ln = regForm.lastName.trim().toLowerCase();
+    const pe = regForm.parentEmail.trim().toLowerCase();
     const existing = students.find(s =>
-      s.firstName === regForm.firstName && s.lastName === regForm.lastName
+      s.firstName.trim().toLowerCase() === fn &&
+      s.lastName.trim().toLowerCase() === ln &&
+      (s.parentEmail || '').trim().toLowerCase() === pe
     );
     let studentId = existing?.id;
     if (!studentId) {
       studentId = generateId();
       addStudent({
         id: studentId,
-        firstName: regForm.firstName,
-        lastName: regForm.lastName,
+        firstName: regForm.firstName.trim(),
+        lastName: regForm.lastName.trim(),
         birthDate: regForm.birthDate,
         parentFirstName: regForm.parentFirstName,
         parentLastName: regForm.parentLastName,
-        parentEmail: regForm.parentEmail,
+        parentEmail: regForm.parentEmail.trim(),
         parentPhone: regForm.parentPhone,
       });
     }

@@ -48,6 +48,7 @@ interface AppContextType {
 
   addStudent: (s: Student) => void;
   updateStudent: (s: Student) => void;
+  deleteStudent: (id: string) => void;
 
   addRegistration: (r: Registration) => void;
   updateRegistration: (r: Registration) => void;
@@ -133,6 +134,7 @@ export const useApp = create<AppContextType>()(
 
       addStudent: async (s) => { set((state) => ({ students: [...state.students, s] })); await supabase.from('students').insert(s); },
       updateStudent: async (s) => { set((state) => ({ students: state.students.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('students').update(s).eq('id', s.id); },
+      deleteStudent: async (id) => { set((state) => ({ students: state.students.filter((x) => x.id !== id) })); await supabase.from('students').delete().eq('id', id); },
 
       addRegistration: async (r) => { set((state) => ({ registrations: [...state.registrations, r] })); await supabase.from('registrations').insert(r); },
       updateRegistration: async (r) => { set((state) => ({ registrations: state.registrations.map((x) => (x.id === r.id ? r : x)) })); await supabase.from('registrations').update(r).eq('id', r.id); },
