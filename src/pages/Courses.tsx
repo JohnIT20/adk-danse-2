@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Euro, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, AlertTriangle, X, Shirt, Euro, BookOpen } from 'lucide-react';
 import type { Course, DanceStyle, Level, AgeGroup, DayOfWeek, AttireItem, AttireCategory } from '../types';
 import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
@@ -83,7 +83,7 @@ export default function Courses() {
     defaultValues: emptyCourse as unknown as CourseFormValues
   });
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [exceptionCourse, setExceptionCourse] = useState<Course | null>(null);
   const [exForm, setExForm] = useState({ originalDate: format(new Date(), 'yyyy-MM-dd'), isCancelled: true, newDate: '', newStartTime: '', newEndTime: '', reason: '' });
@@ -287,12 +287,13 @@ export default function Courses() {
     items: activeCourses.filter(c => (c.style ?? 'Autre') === style),
   }));
 
+  const allGroups: { style: string; items: typeof courses; isInactive?: boolean }[] = [
+    ...grouped,
+    ...(inactiveCourses.length > 0 ? [{ style: '__inactive__', items: inactiveCourses, isInactive: true }] : []),
+  ];
+
   function toggleGroup(key: string) {
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+    setOpenGroup(prev => (prev === key ? null : key));
   }
 
   return (
@@ -306,59 +307,47 @@ export default function Courses() {
         </button>
       </div>
 
-      <div className="space-y-4">
-        {grouped.map(({ style, items }) => {
-          const sc = STYLE_COLORS[style] ?? DEFAULT_STYLE_COLOR;
-          const isCollapsed = collapsedGroups.has(style);
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {allGroups.map(({ style, items, isInactive }) => {
+          const sc = isInactive
+            ? { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: '#9ca3af' }
+            : STYLE_COLORS[style] ?? DEFAULT_STYLE_COLOR;
+          const isOpen = openGroup === style;
+          const label = isInactive ? 'Cours inactifs' : style;
           return (
-            <div key={style} className={`rounded-xl border ${sc.border} overflow-hidden`}>
-              {/* Group header */}
+            <div
+              key={style}
+              className={`${isOpen ? 'sm:col-span-2 lg:col-span-3' : ''} rounded-2xl border ${sc.border} ${sc.bg} overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
+            >
               <button
                 onClick={() => toggleGroup(style)}
-                className={`w-full flex items-center gap-3 px-4 py-3 ${sc.bg} hover:brightness-95 transition-all`}
+                className="w-full p-5 flex items-center gap-4 text-left hover:brightness-95 transition-all"
               >
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: sc.dot }} />
-                <span className={`font-semibold text-sm ${sc.text} flex-1 text-left`}>{style}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.bg} ${sc.text} border ${sc.border}`}>
-                  {items.length} cours
-                </span>
-                {isCollapsed
-                  ? <ChevronRight size={16} className={sc.text} />
-                  : <ChevronDown size={16} className={sc.text} />}
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                  style={{ backgroundColor: sc.dot }}
+                >
+                  <BookOpen size={20} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className={`font-bold text-base ${sc.text} truncate`}>{label}</h3>
+                  <p className={`text-xs ${sc.text} opacity-70 mt-0.5`}>
+                    {items.length} cours
+                  </p>
+                </div>
+                <ChevronDown
+                  size={20}
+                  className={`${sc.text} flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                />
               </button>
-              {/* Course cards */}
-              {!isCollapsed && (
-                <div className="divide-y divide-gray-100">
+              {isOpen && (
+                <div className="bg-white border-t border-gray-100 p-3 space-y-3">
                   {items.map(c => renderCourseCard(c))}
                 </div>
               )}
             </div>
           );
         })}
-
-        {/* Inactive courses */}
-        {inactiveCourses.length > 0 && (
-          <div className="rounded-xl border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => toggleGroup('__inactive__')}
-              className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all"
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-gray-400 flex-shrink-0" />
-              <span className="font-semibold text-sm text-gray-500 flex-1 text-left">Cours inactifs</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                {inactiveCourses.length} cours
-              </span>
-              {collapsedGroups.has('__inactive__')
-                ? <ChevronRight size={16} className="text-gray-400" />
-                : <ChevronDown size={16} className="text-gray-400" />}
-            </button>
-            {!collapsedGroups.has('__inactive__') && (
-              <div className="divide-y divide-gray-100">
-                {inactiveCourses.map(c => renderCourseCard(c))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Course modal */}
