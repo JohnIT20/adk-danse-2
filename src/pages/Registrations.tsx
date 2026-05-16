@@ -177,7 +177,10 @@ export default function Registrations() {
           >
             <BookOpen size={14} /> Inscriptions cours
             {pendingCourseEnrollments.length > 0 && (
-              <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCourseEnrollments.length}</span>
+              <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none" title="Demandes en attente de validation">{pendingCourseEnrollments.length}</span>
+            )}
+            {validatedAwaitingPayment.length > 0 && (
+              <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none" title="Paiements en attente">{validatedAwaitingPayment.length}</span>
             )}
           </button>
           <button
@@ -186,7 +189,10 @@ export default function Registrations() {
           >
             Sessions pro
             {pendingCount > 0 && (
-              <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCount}</span>
+              <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none" title="Demandes en attente de validation">{pendingCount}</span>
+            )}
+            {pendingPaymentCount > 0 && (
+              <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none" title="Paiements en attente">{pendingPaymentCount}</span>
             )}
           </button>
         </div>
