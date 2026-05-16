@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle, BookOpen, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle, BookOpen, Clock, RefreshCw } from 'lucide-react';
 import type { Registration, RegistrationStatus, PaymentStatus } from '../types';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -36,8 +36,32 @@ const PAYMENT_COLORS: Record<PaymentStatus, string> = {
 type MainTab = 'pro' | 'courses';
 
 export default function Registrations() {
-  const { proSessions, registrations, students, addRegistration, updateRegistration, deleteRegistration, addStudent, courseEnrollments, updateCourseEnrollment, courses, teachers } = useApp();
+  const { proSessions, registrations, students, addRegistration, updateRegistration, deleteRegistration, addStudent, courseEnrollments, updateCourseEnrollment, courses, teachers, initializeDb } = useApp();
   const [mainTab, setMainTab] = useState<MainTab>('courses');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Re-fetch every time the admin opens this page so they don't miss
+  // requests submitted by parents since their session started.
+  useEffect(() => {
+    initializeDb();
+  }, [initializeDb]);
+
+  // Real-time subscriptions: any insert/update/delete on the two tables
+  // we care about triggers an immediate full refetch.
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-registrations-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'course_enrollments' }, () => initializeDb())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => initializeDb())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [initializeDb]);
+
+  async function refresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await initializeDb(); } finally { setRefreshing(false); }
+  }
   const [filterSession, setFilterSession] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -144,25 +168,36 @@ export default function Registrations() {
 
   return (
     <div className="space-y-4">
-      {/* Main tab switcher */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {/* Main tab switcher */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+          <button
+            onClick={() => setMainTab('courses')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'courses' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            <BookOpen size={14} /> Inscriptions cours
+            {pendingCourseEnrollments.length > 0 && (
+              <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCourseEnrollments.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setMainTab('pro')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'pro' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Sessions pro
+            {pendingCount > 0 && (
+              <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCount}</span>
+            )}
+          </button>
+        </div>
         <button
-          onClick={() => setMainTab('courses')}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'courses' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={refresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+          title="Recharger depuis la base de donnees"
         >
-          <BookOpen size={14} /> Inscriptions cours
-          {pendingCourseEnrollments.length > 0 && (
-            <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCourseEnrollments.length}</span>
-          )}
-        </button>
-        <button
-          onClick={() => setMainTab('pro')}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'pro' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          Sessions pro
-          {pendingCount > 0 && (
-            <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{pendingCount}</span>
-          )}
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Actualisation...' : 'Actualiser'}
         </button>
       </div>
 
