@@ -8,6 +8,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   linkStudentToParent: (studentId: string) => Promise<void>;
+  unlinkStudentFromParent: (studentId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -30,6 +31,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isAdminEmail && profile.role !== 'admin') {
         await supabase.from('profiles').update({ role: 'admin' }).eq('id', user.id);
         profile.role = 'admin';
+      }
+      // Catch-up linking: pull any orphan students whose parentEmail matches
+      // this account but that aren't yet listed in student_ids.
+      if (profile.role === 'parent') {
+        const { data: orphans } = await supabase
+          .from('students')
+          .select('id')
+          .ilike('parentEmail', user.email);
+        const currentIds: string[] = profile.student_ids ?? [];
+        const missing = (orphans ?? [])
+          .map((o: { id: string }) => o.id)
+          .filter((id: string) => !currentIds.includes(id));
+        if (missing.length > 0) {
+          const merged = [...currentIds, ...missing];
+          await supabase.from('profiles').update({ student_ids: merged }).eq('id', user.id);
+          profile.student_ids = merged;
+        }
       }
       setCurrentUser({ ...profile, password: '' } as UserAccount);
     } else {
@@ -84,8 +102,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(prev => prev ? { ...prev, studentIds: updatedIds } : prev);
   }, [currentUser]);
 
+  const unlinkStudentFromParent = useCallback(async (studentId: string) => {
+    if (!currentUser) return;
+    const updatedIds = currentUser.studentIds.filter(id => id !== studentId);
+    await supabase.from('profiles').update({ student_ids: updatedIds }).eq('id', currentUser.id);
+    setCurrentUser(prev => prev ? { ...prev, studentIds: updatedIds } : prev);
+  }, [currentUser]);
+
   return (
-    <AuthContext.Provider value={{ currentUser, allAccounts: [], login, logout, linkStudentToParent }}>
+    <AuthContext.Provider value={{ currentUser, allAccounts: [], login, logout, linkStudentToParent, unlinkStudentFromParent }}>
       {!loading && children}
     </AuthContext.Provider>
   );

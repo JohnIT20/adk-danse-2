@@ -132,7 +132,29 @@ export const useApp = create<AppContextType>()(
       updateProSession: async (s) => { set((state) => ({ proSessions: state.proSessions.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('pro_sessions').update(s).eq('id', s.id); },
       deleteProSession: async (id) => { set((state) => ({ proSessions: state.proSessions.filter((x) => x.id !== id) })); await supabase.from('pro_sessions').delete().eq('id', id); },
 
-      addStudent: async (s) => { set((state) => ({ students: [...state.students, s] })); await supabase.from('students').insert(s); },
+      addStudent: async (s) => {
+        set((state) => ({ students: [...state.students, s] }));
+        await supabase.from('students').insert(s);
+        // Auto-link to the matching parent profile if one exists, so no
+        // child stays orphaned because someone forgot to wire it up.
+        const email = (s.parentEmail || '').trim().toLowerCase();
+        if (email) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, student_ids')
+            .ilike('email', email)
+            .maybeSingle();
+          if (profile) {
+            const currentIds: string[] = profile.student_ids ?? [];
+            if (!currentIds.includes(s.id)) {
+              await supabase
+                .from('profiles')
+                .update({ student_ids: [...currentIds, s.id] })
+                .eq('id', profile.id);
+            }
+          }
+        }
+      },
       updateStudent: async (s) => { set((state) => ({ students: state.students.map((x) => (x.id === s.id ? s : x)) })); await supabase.from('students').update(s).eq('id', s.id); },
       deleteStudent: async (id) => { set((state) => ({ students: state.students.filter((x) => x.id !== id) })); await supabase.from('students').delete().eq('id', id); },
 

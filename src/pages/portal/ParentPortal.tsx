@@ -4,15 +4,19 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { format, parseISO, differenceInYears } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ChevronRight, Calendar, Star, Music2, LogOut, UserPlus, X, Users } from 'lucide-react';
+import { ChevronRight, Calendar, Star, Music2, LogOut, UserPlus, X, Users, Trash2 } from 'lucide-react';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
 export default function ParentPortal() {
-  const { currentUser, logout, linkStudentToParent } = useAuth();
-  const { students, courseEnrollments, courses, registrations, proSessions, addStudent, addRegistration } = useApp();
+  const { currentUser, logout, linkStudentToParent, unlinkStudentFromParent } = useAuth();
+  const {
+    students, courseEnrollments, courses, registrations, proSessions,
+    addStudent, addRegistration,
+    deleteStudent, deleteCourseEnrollment, deleteRegistration,
+  } = useApp();
   const navigate = useNavigate();
 
   const [showAddChild, setShowAddChild] = useState(false);
@@ -89,6 +93,24 @@ export default function ParentPortal() {
     setChildForm({ firstName: '', lastName: '', birthDate: '' });
     setShowAddChild(false);
     setSaving(false);
+  }
+
+  async function removeChild(studentId: string) {
+    const child = students.find(s => s.id === studentId);
+    if (!child) return;
+    const childEnrollments = courseEnrollments.filter(e => e.studentId === studentId);
+    const childRegistrations = registrations.filter(r => r.studentId === studentId);
+    const ok = window.confirm(
+      `Retirer ${child.firstName} ${child.lastName} de votre famille ?\n\n` +
+      `Sa fiche sera supprimée définitivement, ainsi que ses ${childEnrollments.length} inscription(s) ` +
+      `aux cours et ${childRegistrations.length} session(s) pro.\n\nCette action est irréversible.`
+    );
+    if (!ok) return;
+    // Cascade: enrollments → registrations → student → parent profile link.
+    for (const e of childEnrollments) await deleteCourseEnrollment(e.id);
+    for (const r of childRegistrations) await deleteRegistration(r.id);
+    await deleteStudent(studentId);
+    await unlinkStudentFromParent(studentId);
   }
 
   function getStudentCourseCount(studentId: string) {
@@ -169,40 +191,52 @@ export default function ParentPortal() {
               const nextCourse = getNextCourse(s.id);
 
               return (
-                <button
+                <div
                   key={s.id}
-                  onClick={() => navigate(`/portail/membre/${s.id}`)}
-                  className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md hover:border-purple-200 transition-all text-left group"
+                  className="relative bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-200 transition-all group"
                 >
-                  {/* Avatar */}
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 group-hover:scale-105 transition-transform">
-                    {s.firstName[0]}{s.lastName[0]}
-                  </div>
+                  <button
+                    onClick={() => navigate(`/portail/membre/${s.id}`)}
+                    className="w-full p-5 flex items-center gap-4 text-left"
+                  >
+                    {/* Avatar */}
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white font-bold text-xl flex-shrink-0 group-hover:scale-105 transition-transform">
+                      {s.firstName[0]}{s.lastName[0]}
+                    </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-gray-800 text-lg">{s.firstName} {s.lastName}</div>
-                    {age !== null && (
-                      <div className="text-sm text-gray-400">{age} ans</div>
-                    )}
-                    <div className="flex flex-wrap gap-3 mt-2">
-                      <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">
-                        <Calendar size={11} /> {courseCount} cours / semaine
-                      </span>
-                      {proCount > 0 && (
-                        <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
-                          <Star size={11} /> {proCount} session(s) pro
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-gray-800 text-lg">{s.firstName} {s.lastName}</div>
+                      {age !== null && (
+                        <div className="text-sm text-gray-400">{age} ans</div>
+                      )}
+                      <div className="flex flex-wrap gap-3 mt-2">
+                        <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">
+                          <Calendar size={11} /> {courseCount} cours / semaine
                         </span>
+                        {proCount > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+                            <Star size={11} /> {proCount} session(s) pro
+                          </span>
+                        )}
+                      </div>
+                      {nextCourse && (
+                        <div className="text-xs text-gray-400 mt-1.5 truncate">
+                          Prochain : {nextCourse}
+                        </div>
                       )}
                     </div>
-                    {nextCourse && (
-                      <div className="text-xs text-gray-400 mt-1.5 truncate">
-                        Prochain : {nextCourse}
-                      </div>
-                    )}
-                  </div>
 
-                  <ChevronRight size={20} className="text-gray-300 group-hover:text-purple-500 transition-colors flex-shrink-0" />
-                </button>
+                    <ChevronRight size={20} className="text-gray-300 group-hover:text-purple-500 transition-colors flex-shrink-0" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeChild(s.id); }}
+                    className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Retirer de la famille"
+                    aria-label={`Retirer ${s.firstName} ${s.lastName} de la famille`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               );
             })}
           </div>

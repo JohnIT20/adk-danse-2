@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../lib/supabase';
 import { CheckCircle, XCircle, Plus, Trash2, X, CreditCard, AlertCircle, BookOpen, Clock } from 'lucide-react';
 import type { Registration, RegistrationStatus, PaymentStatus } from '../types';
 import { format, parseISO } from 'date-fns';
@@ -47,7 +48,7 @@ export default function Registrations() {
     notes: '',
   });
 
-  function addReg() {
+  async function addReg() {
     // Find an existing student matching firstName + lastName + parentEmail
     // (case-insensitive, trimmed) to avoid creating duplicates.
     const fn = regForm.firstName.trim().toLowerCase();
@@ -61,7 +62,7 @@ export default function Registrations() {
     let studentId = existing?.id;
     if (!studentId) {
       studentId = generateId();
-      addStudent({
+      await addStudent({
         id: studentId,
         firstName: regForm.firstName.trim(),
         lastName: regForm.lastName.trim(),
@@ -71,6 +72,23 @@ export default function Registrations() {
         parentEmail: regForm.parentEmail.trim(),
         parentPhone: regForm.parentPhone,
       });
+    } else if (pe) {
+      // Student already exists: make sure they're linked to the parent profile
+      // (covers cases where the student was created before the parent signed up).
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, student_ids')
+        .ilike('email', pe)
+        .maybeSingle();
+      if (profile) {
+        const currentIds: string[] = profile.student_ids ?? [];
+        if (!currentIds.includes(studentId)) {
+          await supabase
+            .from('profiles')
+            .update({ student_ids: [...currentIds, studentId] })
+            .eq('id', profile.id);
+        }
+      }
     }
 
     const today = format(new Date(), 'yyyy-MM-dd');
