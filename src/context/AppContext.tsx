@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type {
   Teacher, Course, ProSession, Student, Registration, CourseException, Spectacle, CourseEnrollment,
@@ -166,9 +167,36 @@ export const useApp = create<AppContextType>()(
       updateCourseException: async (e) => { set((state) => ({ courseExceptions: state.courseExceptions.map((x) => (x.id === e.id ? e : x)) })); await supabase.from('course_exceptions').update(e).eq('id', e.id); },
       deleteCourseException: async (id) => { set((state) => ({ courseExceptions: state.courseExceptions.filter((x) => x.id !== id) })); await supabase.from('course_exceptions').delete().eq('id', id); },
 
-      addCourseEnrollment: async (e) => { set((state) => ({ courseEnrollments: [...state.courseEnrollments, e] })); await supabase.from('course_enrollments').insert(e); },
-      updateCourseEnrollment: async (e) => { set((state) => ({ courseEnrollments: state.courseEnrollments.map((x) => (x.id === e.id ? e : x)) })); await supabase.from('course_enrollments').update(e).eq('id', e.id); },
-      deleteCourseEnrollment: async (id) => { set((state) => ({ courseEnrollments: state.courseEnrollments.filter((x) => x.id !== id) })); await supabase.from('course_enrollments').delete().eq('id', id); },
+      addCourseEnrollment: async (e) => {
+        set((state) => ({ courseEnrollments: [...state.courseEnrollments, e] }));
+        const { error } = await supabase.from('course_enrollments').insert(e);
+        if (error) {
+          // Rollback the optimistic insert so the UI matches the DB.
+          set((state) => ({ courseEnrollments: state.courseEnrollments.filter((x) => x.id !== e.id) }));
+          toast.error(`Inscription non enregistrée : ${error.message}`);
+          throw error;
+        }
+      },
+      updateCourseEnrollment: async (e) => {
+        const previous = useApp.getState().courseEnrollments.find((x) => x.id === e.id);
+        set((state) => ({ courseEnrollments: state.courseEnrollments.map((x) => (x.id === e.id ? e : x)) }));
+        const { error } = await supabase.from('course_enrollments').update(e).eq('id', e.id);
+        if (error) {
+          if (previous) set((state) => ({ courseEnrollments: state.courseEnrollments.map((x) => (x.id === e.id ? previous : x)) }));
+          toast.error(`Mise à jour échouée : ${error.message}`);
+          throw error;
+        }
+      },
+      deleteCourseEnrollment: async (id) => {
+        const previous = useApp.getState().courseEnrollments.find((x) => x.id === id);
+        set((state) => ({ courseEnrollments: state.courseEnrollments.filter((x) => x.id !== id) }));
+        const { error } = await supabase.from('course_enrollments').delete().eq('id', id);
+        if (error) {
+          if (previous) set((state) => ({ courseEnrollments: [...state.courseEnrollments, previous] }));
+          toast.error(`Suppression échouée : ${error.message}`);
+          throw error;
+        }
+      },
 
       addChangeRequest: async (r) => { set((state) => ({ changeRequests: [...state.changeRequests, r] })); await supabase.from('schedule_change_requests').insert(r); },
       updateChangeRequest: async (r) => { set((state) => ({ changeRequests: state.changeRequests.map((x) => (x.id === r.id ? r : x)) })); await supabase.from('schedule_change_requests').update(r).eq('id', r.id); },

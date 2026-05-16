@@ -103,16 +103,24 @@ export default function ChildView() {
     return { top: `${(s / TOTAL_MIN) * 100}%`, height: `${((e - s) / TOTAL_MIN) * 100}%` };
   }
 
-  function enrollInCourse(courseId: string) {
-    addCourseEnrollment({
-      id: generateId(),
-      courseId,
-      studentId: studentId!,
-      enrolledAt: format(new Date(), 'yyyy-MM-dd'),
-      status: 'pending',
-      paymentStatus: 'pending',
-    });
-    setShowEnrollModal(false);
+  async function enrollInCourse(courseId: string) {
+    try {
+      await addCourseEnrollment({
+        id: generateId(),
+        courseId,
+        studentId: studentId!,
+        enrolledAt: format(new Date(), 'yyyy-MM-dd'),
+        status: 'pending',
+        paymentStatus: 'pending',
+      });
+      setShowEnrollModal(false);
+      // The optimistic state is already updated; if the insert succeeded
+      // the request will also surface on the admin & teacher dashboards.
+    } catch {
+      // addCourseEnrollment already surfaces the Supabase error via toast
+      // and rolls back the optimistic state. Keep the modal open so the
+      // parent can retry.
+    }
   }
 
   function unenroll(courseId: string) {
