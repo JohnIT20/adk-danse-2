@@ -267,13 +267,24 @@ export default function Courses() {
     );
   }
 
-  // Group active courses by style, keep inactive separate
+  // Group active courses by style, keep inactive separate.
+  // Data-driven: group by the actual `style` value present in the data
+  // (works even if Supabase returns a value not in the predefined STYLES list).
   const activeCourses = courses.filter(c => c.active);
   const inactiveCourses = courses.filter(c => !c.active);
-  const styleOrder = STYLES.filter(s => activeCourses.some(c => c.style === s));
+  const presentStyles: string[] = Array.from(new Set(activeCourses.map(c => c.style ?? 'Autre')));
+  const KNOWN_STYLES: string[] = STYLES;
+  const styleOrder = presentStyles.sort((a, b) => {
+    const ia = KNOWN_STYLES.indexOf(a);
+    const ib = KNOWN_STYLES.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
   const grouped = styleOrder.map(style => ({
     style,
-    items: activeCourses.filter(c => c.style === style),
+    items: activeCourses.filter(c => (c.style ?? 'Autre') === style),
   }));
 
   function toggleGroup(key: string) {
